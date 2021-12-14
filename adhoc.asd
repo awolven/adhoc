@@ -6,6 +6,7 @@
   :description "Another Declarative Hierarchical Object-centric CLOS Customization"
   :depends-on (:closer-mop)
   :author "Andrew K Wolven <awolven@gmail.com>"
+  :license "GPLv3"
   :components
   ((:file "src/package")
    (:file "src/adhoc")))
