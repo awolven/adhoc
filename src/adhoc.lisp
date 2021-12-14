@@ -4,6 +4,8 @@
 
 (in-package :adhoc)
 
+(defvar self nil)
+
 (define-symbol-macro +slot-unbound+ #+sbcl sb-pcl::+slot-unbound+ #+ccl (ccl::%slot-unbound-marker))
 
 #+CCL
