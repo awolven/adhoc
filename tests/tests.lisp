@@ -594,3 +594,33 @@
   :components
   ((sfs :type 'simple-foo
 	:aggregate (:size (the aggregate-size)))))
+
+(defobject hidden-components-test-1 ()
+  :hidden-components
+  ((sf :type 'simple-foo)
+   (sf3s :type 'simple-foo
+	 :aggregate (:size 3)))
+
+  :components
+  ((c1 :type 'child1)
+   (c2s :type 'child1
+	:aggregate (:size 2))))
+
+(defun hidden-components-test-1 ()
+  (let ((self (make-instance 'hidden-components-test-1)))
+    (let ((hidden-children (adhoc::get-hidden-children self))
+	  (ordinary-children (the children)))
+      (and hidden-children (every #'(lambda (obj)
+				      (typep obj 'simple-foo))
+				  hidden-children)
+	   (eq (length hidden-children) 4)
+	   ordinary-children (every #'(lambda (obj)
+				      (typep obj 'child1))
+				    ordinary-children)
+	   (eq (length ordinary-children) 3)))))
+
+(5am:test hidden-components-test-1 ()
+  (5am:is (hidden-components-test-1)))
+      
+
+  

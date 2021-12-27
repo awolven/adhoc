@@ -324,7 +324,8 @@
 (defclass component-definition-mixin ()
   ((provided-inputs)
    (class-spec-function :accessor class-spec-function)
-   (provided-inputs-source)))
+   (provided-inputs-source)
+   (hidden? :accessor slot-hidden? :initform nil :initarg :hidden?)))
 
 (defmethod attribute-function ((slotd component-definition-mixin))
   nil)
@@ -457,6 +458,7 @@
   ((direct-descending-attributes :initform nil :reader direct-descending-attributes :initarg :direct-descending-attributes)
    (effective-descending-attributes :initform nil :accessor effective-descending-attributes)
    (component-eslotds :initform nil :accessor component-eslotds)
+   (hidden-component-eslotds :initform nil :accessor hidden-component-eslotds)
    (slot-locations :initform (make-hash-table) :accessor slot-locations)
    (children-dependents :initform nil :accessor children-dependents)))
 
@@ -474,7 +476,8 @@
 
     (setf (effective-descending-attributes class) (remove-duplicates all-descending-attributes))
 
-    (let ((component ()))
+    (let ((components ())
+	  (hidden ()))
       
       (loop for eslotd in (class-slots class)
 	 do
@@ -482,9 +485,13 @@
 		 (slot-definition-location eslotd))
 
 	   (when (typep eslotd 'effective-component-definition-mixin)
-	     (push eslotd component))
+	     (if (slot-hidden? eslotd)
+		 (push eslotd hidden)
+		 (push eslotd components)))
 	   
-	 finally (setf (component-eslotds class) (nreverse component))))
+	 finally (setf (component-eslotds class) (nreverse components)
+		       (hidden-component-eslotds class) (nreverse hidden))))
+	   
     
     (values)))
 
@@ -580,7 +587,8 @@
 			   &rest dslotds)
   (declare (ignore dslotds))
   (setf (class-spec-function eslotd) (class-spec-function dslotd)
-	(slot-value eslotd 'provided-inputs) (slot-value dslotd 'provided-inputs))
+	(slot-value eslotd 'provided-inputs) (slot-value dslotd 'provided-inputs)
+	(slot-value eslotd 'hidden?) (slot-value dslotd 'hidden?))
   eslotd)
 
 (defmethod upgrade-eslotd ((eslotd effective-array-aggregate-component-definition-mixin)
@@ -1331,6 +1339,18 @@
 		   (if (typep c 'array-aggregate)
 		       (send c list-elements)
 		       (list c)))))))
+
+(defmethod get-hidden-children ((object adhoc-mixin))
+  (let* ((class (class-of object)))
+    (finalize-inheritance class) ;; todo: find lighter weight method
+    (when *dependent*
+      (pushnew *dependent* (children-dependents class) :test #'eq))
+    (let ((eslotds (hidden-component-eslotds class)))
+      (loop for eslotd in eslotds
+	 append (let ((c (slot-value-using-class class object eslotd)))
+		  (if (typep c 'array-aggregate)
+		      (send c list-elements)
+		      (list c)))))))
 		    
 
 (defparameter *descending-attributes* nil)
@@ -1487,7 +1507,7 @@
 				      :body `',body)))))
 		   (t (error "Invalid attribute specification: ~S" attribute-definition)))))
 
-(defun parse-components-section (class-name section)
+(defun parse-components-section (class-name section &key (hidden? nil))
   (loop for component-definition in section
      collect (let ((plist)
 		   (type-spec)
@@ -1528,6 +1548,7 @@
 			   (if size
 			       (list :slot-class :array-aggregate)
 			       (list :slot-class :table-aggregate))
+			   (when hidden? (list :hidden? t))
 			   (list :type-function
 				 (let ((value-sym (gensym)))
 				   `(named-lambda (:aggregate-component-input :type (,class-name (,name . indices)))
@@ -1577,7 +1598,7 @@
 		   (list 'list
 			 :name `',name
 			 :slot-class :ordinary-component
-			       
+			 :hidden? hidden?
 			 :type-function `(named-lambda (:component-input :type (,class-name (,name ?)))
 					     (self)
 					   (declare (ignorable self))
@@ -1743,7 +1764,8 @@
 			(:slots (parse-slots-section class-name section))
 			(:inputs (parse-inputs-section class-name section))
 			(:attributes (parse-attributes-section class-name section))
-			(:components (parse-components-section class-name section))))))
+			(:components (parse-components-section class-name section))
+			(:hidden-components (parse-components-section class-name section :hidden? t))))))
       (values all-slots metaclass)))
 
 ;; forward declare object for defobject macro
