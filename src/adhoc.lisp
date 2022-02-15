@@ -341,7 +341,9 @@
 
 ;; serialization
 (defmethod slot-class-keyword ((slotd component-definition-mixin))
-  :components)
+  (if (slot-value slotd 'hidden?)
+      :hidden-components
+      :components))
 
 ;; serialization
 (defmethod type-function ((slotd component-definition-mixin) &rest indices)
@@ -435,7 +437,7 @@
 (defmacro with-cnm-support (attribute-name attribute-method-function-lambda)
   (let ((next-method-arg (gensym "NEXT-METHOD"))
 	(self-arg (gensym "SELF-")))
-    `(lambda (,next-method-arg ,self-arg)
+    `(named-lambda ,attribute-name (,next-method-arg ,self-arg)
        (flet ((next-method-p ()
 		(not (null ,next-method-arg))))
 	 (declare (ignorable (function next-method-p)))
@@ -1355,76 +1357,88 @@
 
 (defparameter *descending-attributes* nil)
 
+(defun duplicate-slot-error (class-name name)
+  (error "duplicate slot name ~S in ~S." name class-name))
+
 (defun parse-inputs-section (class-name section)
   (loop for input-definition in section
-     collect (cond ((and input-definition
-			 (atom input-definition)
-			 (symbolp input-definition)
-			 (not (keywordp input-definition)))
-		    (list 'list
-			  :name `',input-definition
-			  :initargs `'(,input-definition)
-			  :slot-class :ordinary-input))
-		   ((and (consp input-definition)
-			 (atom (first input-definition))
-			 (symbolp (first input-definition))
-			 (not (keywordp (first input-definition))))
-		    (let ((defaulting nil)
-			  (descending nil)
-			  (noticers ())
-			  (list (copy-list (rest input-definition)))
-			  (body nil))
-		      (tagbody
-		       start
-			 (cond ((eq (first list) :defaulting) (setq defaulting t) (pop list) (go start))
-			       ((eq (first list) :descending) (setq descending t) (pop list) (go start))
-			       ((and (consp (first list))
-				     (eq (first (first list)) :noticer))
-				(push (rest (pop list)) noticers) (go start))
-			       ((not (or (eq (first list) :defaulting)
-					 (eq (first list) :descending)))
-				(when list
-				  (setq body list))
-				(go exit)))
-		       exit)
-		      (when descending
-			(push (first input-definition) *descending-attributes*))
-		      (list* 'list
-			     :name `',(first input-definition)
-			     :initargs `'(,(first input-definition))
-			     (append
-			      (if (null body)
-				  (if defaulting
-				   (list :slot-class :defaulting-ordinary-input)
-				   (list :slot-class :ordinary-input))
-				  (list* :body `',body
-					 :function `(with-cnm-support ,(first input-definition)
-						      (named-lambda (:input (,(first input-definition) ,class-name))
-							  (self)
-							(declare (ignorable self))
-							(declare (type ,class-name self))
-							,@body))
-					 (if defaulting
-					     (list :slot-class :defaulting-optional-input)
-					     (list :slot-class :optional-input))))
-			      (when noticers
-				(list :noticers
-				      (list
-				       'list
-				       (loop for noticer in (reverse noticers) for i from 0
-					  append
-					    (list 'list
-						  `(named-lambda (:noticer (,(first input-definition) ,class-name ,i))
-						       (self value)
-						     (declare (ignorable self value))
-						     (declare (type ,class-name self))
-						     ,@noticer
-						     (values))
-						  :source `',noticer)))))))))
-		   (t (error "Invalid input specification: ~S" input-definition)))))
+	do (let ((slot (if (consp input-definition) (first input-definition) input-definition)))
+	     (if (gethash slot *slots-table*)
+		 (duplicate-slot-error class-name slot)
+		 (setf (gethash slot *slots-table*) t)))
+	collect (cond ((and input-definition
+			    (atom input-definition)
+			    (symbolp input-definition)
+			    (not (keywordp input-definition)))
+		       (list 'list
+			     :name `',input-definition
+			     :initargs `'(,input-definition)
+			     :slot-class :ordinary-input))
+		      ((and (consp input-definition)
+			    (atom (first input-definition))
+			    (symbolp (first input-definition))
+			    (not (keywordp (first input-definition))))
+		       (let ((defaulting nil)
+			     (descending nil)
+			     (noticers ())
+			     (list (copy-list (rest input-definition)))
+			     (body nil))
+			 (tagbody
+			  start
+			    (cond ((eq (first list) :defaulting) (setq defaulting t) (pop list) (go start))
+				  ((eq (first list) :descending) (setq descending t) (pop list) (go start))
+				  ((and (consp (first list))
+					(eq (first (first list)) :noticer))
+				   (push (rest (pop list)) noticers) (go start))
+				  ((not (or (eq (first list) :defaulting)
+					    (eq (first list) :descending)))
+				   (when list
+				     (setq body list))
+				   (go exit)))
+			  exit)
+			 (when descending
+			   (push (first input-definition) *descending-attributes*))
+			 
+			 (list* 'list
+				:name `',(first input-definition)
+				:initargs `'(,(first input-definition))
+				(append
+				 (if (null body)
+				     (if defaulting
+					 (list :slot-class :defaulting-ordinary-input)
+					 (list :slot-class :ordinary-input))
+				     (list* :body `',body
+					    :function `(with-cnm-support (:input (,(first input-definition) ,class-name))
+							 (named-lambda (:input (,(first input-definition) ,class-name))
+							     (self)
+							   (declare (ignorable self))
+							   (declare (type ,class-name self))
+							   ,@body))
+					    (if defaulting
+						(list :slot-class :defaulting-optional-input)
+						(list :slot-class :optional-input))))
+				 (when noticers
+				   (list :noticers
+					 (list
+					  'list
+					  (loop for noticer in (reverse noticers) for i from 0
+						append
+						(list 'list
+						      `(named-lambda (:noticer (,(first input-definition) ,class-name ,i))
+							   (self value)
+							 (declare (ignorable self value))
+							 (declare (type ,class-name self))
+							 ,@noticer
+							 (values))
+						      :source `',noticer)))))))))
+		      (t (error "Invalid input specification: ~S" input-definition)))))
 
 (defun parse-attributes-section (class-name section)
   (loop for attribute-definition in section
+	do (let ((slot (first attribute-definition)))
+	     (if (gethash slot *slots-table*)
+		 (duplicate-slot-error class-name slot)
+		 (setf (gethash slot *slots-table*) t)))
      collect (cond ((and (consp attribute-definition)
 			 (symbolp (first attribute-definition))
 			 (not (keywordp (first attribute-definition))))
@@ -1462,7 +1476,7 @@
 			    (modifiable (list* 'list
 					       :name `',(first attribute-definition)
 					       :slot-class :modifiable-attribute
-					       :function `(with-cnm-support ,(first attribute-definition)
+					       :function `(with-cnm-support (:modifiable-attribute (,(first attribute-definition) ,class-name))
 							    (named-lambda (:modifiable-attribute (,(first attribute-definition) ,class-name))
 								(self)
 							      (declare (ignorable self))
@@ -1488,7 +1502,7 @@
 					    :name `',(first attribute-definition)
 					    :slot-class :uncached-attribute
 					    :allocation :none
-					    :function `(with-cnm-support ,(first attribute-definition)
+					    :function `(with-cnm-support (:uncached-attribute (,(first attribute-definition) ,class-name))
 							 (named-lambda (:uncached-attribute (,(first attribute-definition) ,class-name))
 							     (self)
 							   (declare (ignorable self))
@@ -1498,7 +1512,7 @@
 			    (t (list 'list
 				      :name `',(first attribute-definition)
 				      :slot-class :ordinary-attribute
-				      :function `(with-cnm-support ,(first attribute-definition)
+				      :function `(with-cnm-support (:attribute (,(first attribute-definition) ,class-name))
 						   (named-lambda (:attribute (,(first attribute-definition) ,class-name))
 						       (self)
 						     (declare (ignorable self))
@@ -1509,6 +1523,10 @@
 
 (defun parse-components-section (class-name section &key (hidden? nil))
   (loop for component-definition in section
+	do (let ((slot (first component-definition)))
+	     (if (gethash slot *slots-table*)
+		 (duplicate-slot-error class-name slot)
+		 (setf (gethash slot *slots-table*) t)))
      collect (let ((plist)
 		   (type-spec)
 		   (name)
@@ -1628,6 +1646,10 @@
 
 ;; from closette
 (defun canonicalize-direct-slot (spec)
+  (let ((s (if (symbolp spec) spec (car spec))))
+    (if (gethash s *slots-table*)
+	(duplicate-slot-error 'unknown s)
+	(setf (gethash s *slots-table*) t)))
   (if (symbolp spec)
       `(list :name ',spec)
       (let ((name (car spec))
@@ -1669,63 +1691,7 @@
 
 (defun parse-slots-section (class-name section)
   (declare (ignore class-name))
-  (mapcar #'canonicalize-direct-slot section)
-  
-  #+NIL
-  (labels ((make-initfunction (initform)
-	     `(function (lambda () ,initform)))
-	   (parse-slot-spec (spec)
-	     (let* ((name (car spec))
-		    (plist (cdr spec))
-		    (readers ())
-		    (writers ())
-		    (initargs ())
-		    (others ())
-		    (unsupplied (list nil))
-		    (type t)
-		    (initform unsupplied))
-	       (flet ((note-reader (x)
-			(unless (symbolp x)
-			  (error "Slot reader name ~S for slot ~S in ~
-                                DEFOBJECT ~S is not a symbol" x name class-name))
-			(push x readers))
-		      (note-writer (x)
-			(push x writers)))
-		 (loop for (key val) on plist by #'cddr
-		    do (case key
-			 (:descending (when val (push name *descending-attributes*)))
-			 (:accessor (note-reader val) (note-writer `(setf ,val)))
-			 (:reader (note-reader val))
-			 (:writer (note-writer val))
-			 (:initarg
-			  (unless (symbolp val)
-			    (error "Slot initarg name ~S for slot ~S in ~
-                                     DEFOBJECT ~S is not a symbol."
-				   val name class-name))
-			  (push val initargs))
-			 ((:initform :type :allocation :documentation)
-			  (case key
-			    (:initform (setf initform val))
-			    (:type (setf type val)))
-			  (when (get-properties others (list key))
-			    (error "Duplicate slot option ~S for slot ~S ~
-                                     in DEFOBJECT ~S." key name class-name))
-			  (push val (getf others key)))))
-		 (do ((head others (cddr head)))
-		     ((null head))
-		   (unless (cdr (second head))
-		     (setf (second head) (car (second head)))))
-		 (let ((canon `(:name ',name :readers ',readers :writers ',writers :initargs ',initargs))
-		       (ifm (getf others :initform))) ;; kludge.
-		   (remf others :initform)
-		   (if (eq initform unsupplied)
-		       canon
-		       (append (list :initfunction (make-initfunction initform))
-			       canon
-			       (list :initform `',ifm)
-			       others)))))))
-    (loop for spec in section
-       collect (parse-slot-spec spec))))
+  (mapcar #'canonicalize-direct-slot section))
 
 (defmethod defining-expression ((dslotd standard-direct-slot-definition))
   (let* ((class (slot-value dslotd +slotd-class-slot-name+))
@@ -1752,8 +1718,11 @@
 		   (when (slot-definition-allocation dslotd)
 		     (list (list :allocation (slot-definition-allocation dslotd))))))))
 
+(defparameter *slots-table* nil)
+
 (defun parse-defobject-body (class-name body)
-  (let* ((metaclass nil)
+  (let ((*slots-table* (make-hash-table)))
+    (let* ((metaclass nil)
 	   (all-slots
 	    (loop for (keyword section) on body by #'cddr
 	       append (ecase keyword
@@ -1766,7 +1735,7 @@
 			(:attributes (parse-attributes-section class-name section))
 			(:components (parse-components-section class-name section))
 			(:hidden-components (parse-components-section class-name section :hidden? t))))))
-      (values all-slots metaclass)))
+      (values all-slots metaclass))))
 
 ;; forward declare object for defobject macro
 (defclass object ()
@@ -2017,11 +1986,14 @@
 				collect (apply #'aggregate-lookup aggregate indices))))))
 
 (defmethod emit-defobject-body ((class adhoc-class) &optional add remove rename)
-  (let ((result ())
-	(sub (list :head))
-	(dslotds (remove-if #'(lambda (slotd)
-				(member (slot-definition-name slotd) remove))
-			    (class-direct-slots class))))
+  (let* ((result ())
+	 (sub (list :head))
+	 (addz (loop for (kwd value) on add by #'cddr
+		     append (mapcar #'first value)))
+	 (dslotds (remove-if #'(lambda (slotd)
+				 (or (member (slot-definition-name slotd) remove)
+				     (member (slot-definition-name slotd) addz)))
+			     (class-direct-slots class))))
     (loop for dslotd in dslotds
        for next in (append (rest dslotds) (list nil))
        with first? = t
@@ -2029,11 +2001,18 @@
 	    (push (slot-class-keyword dslotd) result)
 	    (setq first? nil))
 
-	 (let* ((defining-expression (defining-expression dslotd))
-		(rename-cell (assoc (first defining-expression) rename)))
+	  (let* ((defining-expression (defining-expression dslotd))
+		 (rename-cell (assoc (if (symbolp defining-expression)
+					 defining-expression
+					 (first defining-expression))
+				     rename)))
+
 	   (when rename-cell
-	     (setq defining-expression (list* (second rename-cell)
-					      (cdr defining-expression))))
+	     (setq defining-expression (if (listp defining-expression)
+					   (list* (second rename-cell)
+						  (cdr defining-expression))
+					   (second rename-cell))))
+	    
 	   (push defining-expression (cdr sub)))
 
 	 (if next
@@ -2043,6 +2022,7 @@
 	       (setq sub (list :head))
 	       (push (slot-class-keyword next) result))
 	     (push (nreverse (cdr sub)) result))
+	 ;;(break "~s" result)
        finally (return-from emit-defobject-body
 		 (append (nreverse result) add)))))
 
