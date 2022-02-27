@@ -412,6 +412,16 @@
 						       standard-direct-slot-definition)
   ())
 
+(defmethod defining-expression ((slotd direct-array-aggregate-component-definition))
+  (let ((slot-definition-name (slot-definition-name slotd))
+	(type-expression (slot-value slotd 'type-expression))
+	(size-expression (slot-value slotd 'size-expression))
+	(provided-inputs-expression (slot-value slotd 'provided-inputs-source)))
+    (list* slot-definition-name
+	   :type type-expression
+	   :aggregate (list :size size-expression)
+	   provided-inputs-expression)))    
+
 (defclass direct-table-aggregate-component-definition (direct-table-aggregate-component-definition-mixin
 						       standard-direct-slot-definition)
   ())
@@ -1764,9 +1774,19 @@
 	    (unbind-this-variable variable)
 	    (unbind-dependent-variables variable))))
 
-(defmethod update-instance-for-different-class :after ((previous object) (current object) &rest initargs)
+(defmethod update-instance-for-different-class :before ((previous object) (current object) &rest initargs)
   (declare (ignore initargs))
-  
+
+  (let* ((class (class-of current))
+	 (slotds (class-slots class))
+	 (new-location nil))
+
+    (loop for new-slotd in (subseq slotds 5)
+	  when (and (eq (slot-definition-allocation new-slotd) :instance)
+		    (setq new-location (slot-definition-location new-slotd)))
+	    ;; clear these slots, more specific methods will have to fill them
+	    do (setf (standard-instance-access current new-location) +slot-unbound+)))
+
   (let* ((class (class-of previous))
 	 (slotds (class-slots class))
 	 (old-location nil))
@@ -1776,11 +1796,11 @@
 		 (eq (slot-definition-allocation old-slotd) :instance)
 		 (setq old-location (slot-definition-location old-slotd)))
        do
-	 (let ((maybe-variable (standard-instance-access-compat previous old-location)))
+	  (let ((maybe-variable (standard-instance-access-compat previous old-location)))
 	   (when (typep maybe-variable 'variable)
 	     (unbind-this-variable maybe-variable)
 	     (unbind-dependent-variables maybe-variable)))))
-  
+
   (let* ((class (class-of previous))
 	 (slotds (class-slots class))
 	 (old-location nil))
@@ -1815,7 +1835,7 @@
 	  (unbind-dependent-variables value)))
 
   ;; conservative approach: blast all adhoc data
-  #+NOTNOW
+
   (let ((slotv (sb-pcl::std-instance-slots instance)))
     (loop for maybe-variable across slotv for i from 0
        do (unless (eq maybe-variable +slot-unbound+)
@@ -1826,6 +1846,7 @@
 		(setf (svref slotv i) +slot-unbound+))))))
 
   ;; less conservative approach, save settable slot values, save variable
+  #+NIL
   (let* ((class (class-of instance))
 	 (slotds (class-slots class))
 	 (location))
