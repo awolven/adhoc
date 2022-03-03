@@ -1366,6 +1366,7 @@
 		    
 
 (defparameter *descending-attributes* nil)
+(defparameter *slots-table* nil)
 
 (defun duplicate-slot-error (class-name name)
   (error "duplicate slot name ~S in ~S." name class-name))
@@ -1728,7 +1729,7 @@
 		   (when (slot-definition-allocation dslotd)
 		     (list (list :allocation (slot-definition-allocation dslotd))))))))
 
-(defparameter *slots-table* nil)
+
 
 (defun parse-defobject-body (class-name body)
   (let ((*slots-table* (make-hash-table)))
