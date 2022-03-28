@@ -1786,7 +1786,7 @@
 		    (setq new-location (slot-definition-location new-slotd)))
 	    ;; clear these slots, more specific methods will have to fill them
 	    do (setf (standard-instance-access current new-location) +slot-unbound+)))
-
+#+NIL
   (let* ((class (class-of previous))
 	 (slotds (class-slots class))
 	 (old-location nil))
@@ -1800,7 +1800,7 @@
 	   (when (typep maybe-variable 'variable)
 	     (unbind-this-variable maybe-variable)
 	     (unbind-dependent-variables maybe-variable)))))
-
+#+NIL
   (let* ((class (class-of previous))
 	 (slotds (class-slots class))
 	 (old-location nil))

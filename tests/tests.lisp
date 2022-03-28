@@ -622,5 +622,117 @@
 (5am:test hidden-components-test-1 ()
   (5am:is (hidden-components-test-1)))
       
+(defobject class-0 ()
+  :inputs
+  ((one 1))
 
+  :attributes
+  ((two 2))
+
+  :components
+  ((three :type 'class-0
+	  one 7)))
+
+(defobject class-1 ()
+  :inputs
+  ((three 8))
+
+  :attributes
+  ((one 9))
+
+  :components
+  ((two :type 'class-0
+	one 10)))
+
+(defun change-class-test-1 ()
+  (let ((inst-a (make-instance 'class-0)))
+    (change-class inst-a 'class-1)
+    (send inst-a one)
+    (send inst-a two one)
+    (send inst-a three)
+    t))
+
+(5am:test change-class-test-1 ()
+  (5am:is (change-class-test-1)))
+
+(defobject class-2 ()
+  :inputs
+  ((one 1))
+
+  :attributes
+  ((two 2))
+
+  :components
+  ((three :type 'class-0
+	  one 11))
+
+  :attributes
+  ((four :modifiable 4)))
+
+(defun change-class-test-2 ()
+  (let ((inst (make-instance 'class-0)))
+    (change-class inst 'class-2)
+    (send inst one)
+    (send inst two)
+    (send inst three)
+    (send inst four)
+    t))
+
+(5am:test change-class-test-2 ()
+  (5am:is (change-class-test-2)))
+
+(defun change-class-test-3 ()
+  (let ((inst (make-instance 'class-2)))
+    (change-class inst 'class-0)
+    (send inst one)
+    (send inst two)
+    (send inst three)
+    t))
+
+(5am:test change-class-test-3 ()
+  (5am:is (change-class-test-3)))
+
+(defobject class-3 ()
+  :inputs
+  ((one 1))
+
+  :attributes
+  ((two :uncached 2))
+
+  :components
+  ((three :type 'class-0
+	  one 11)))
+
+(defun change-class-test-4 ()
+  (let ((self (make-instance 'class-3)))
+    (change-class self 'class-0)
+    (the one)
+    (the two)
+    (the three)
+    t))
+
+(5am:test change-class-test-4 ()
+  (5am:is (change-class-test-4)))
+
+(defun change-class-test-5 ()
+  (let ((self (make-instance 'class-0)))
+    (change-class self 'class-3)
+    (the one)
+    (the two)
+    (the three)
+    t))
+
+(5am:test change-class-test-5 ()
+  (5am:is (change-class-test-5)))
   
+(defobject odd-class ())
+
+(defobject even-class ())
+
+(defobject numbers ()
+  :components
+  ((numbers :aggregate (:size 10)
+            :type (let ((index (first indices)))
+                    (if (oddp index)
+                        'odd-class
+                        'even-class)))))
