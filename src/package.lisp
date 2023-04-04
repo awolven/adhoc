@@ -53,6 +53,8 @@
 	   #:index
 	   #:children
 	   #:root-path
+	   #:null-object
+	   #:null-object-p
 	   #:without-dependency-capture))
 
 (defmacro adhoc:defpackage (name &rest options)

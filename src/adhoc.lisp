@@ -448,6 +448,7 @@
   (let ((next-method-arg (gensym "NEXT-METHOD"))
 	(self-arg (gensym "SELF-")))
     `(named-lambda ,attribute-name (,next-method-arg ,self-arg)
+       (declare (ignorable ,next-method-arg))
        (flet ((next-method-p ()
 		(not (null ,next-method-arg))))
 	 (declare (ignorable (function next-method-p)))
@@ -480,7 +481,14 @@
 (defmethod validate-superclass ((c1 funcallable-adhoc-class) (c2 funcallable-standard-class))
   t)
 
-(defmethod finalize-inheritance :after ((class adhoc-class))
+(defun finalize-inheritance-lite (adhoc-class)
+  (unless (class-finalized-p adhoc-class)
+    (compute-class-precedence-list adhoc-class)
+    (compute-slots adhoc-class)
+    ;; note: we do not call make-instances-obsolete here.
+    (adhoc-class-finalize-inheritance-after adhoc-class)))
+
+(defun adhoc-class-finalize-inheritance-after (class)
   (let* ((adhoc-classes (remove-if-not #'(lambda (class)
 					   (typep class 'adhoc-class))
 				       (class-precedence-list class)))
@@ -492,20 +500,24 @@
 	  (hidden ()))
       
       (loop for eslotd in (class-slots class)
-	 do
-	   (setf (gethash (slot-definition-name eslotd) (slot-locations class))
-		 (slot-definition-location eslotd))
+	    do
+	       (setf (gethash (slot-definition-name eslotd) (slot-locations class))
+		     (slot-definition-location eslotd))
 
-	   (when (typep eslotd 'effective-component-definition-mixin)
-	     (if (slot-hidden? eslotd)
-		 (push eslotd hidden)
-		 (push eslotd components)))
+	       (when (typep eslotd 'effective-component-definition-mixin)
+		 (if (slot-hidden? eslotd)
+		     (push eslotd hidden)
+		     (push eslotd components)))
 	   
-	 finally (setf (component-eslotds class) (nreverse components)
-		       (hidden-component-eslotds class) (nreverse hidden))))
+	    finally (setf (component-eslotds class) (nreverse components)
+			  (hidden-component-eslotds class) (nreverse hidden))))
 	   
     
     (values)))
+    
+
+(defmethod finalize-inheritance :after ((class adhoc-class))
+  (adhoc-class-finalize-inheritance-after class))
 
 (defmethod validate-superclass ((c1 adhoc-class) (c2 standard-class))
   t)
@@ -636,7 +648,8 @@
    (superior :reader superior :initform nil :initarg :superior)
    (component-definition :accessor component-definition :initform nil :initarg :component-definition)
    (aggregate :reader aggregate :initform nil :initarg :aggregate)
-   (indices :reader component-indices :initform nil :initarg :indices)))
+   (indices :reader component-indices :initform nil :initarg :indices)
+   (inittest :initform nil)))
 
 (defmethod shared-initialize :after ((instance adhoc-mixin) slot-names &rest initargs)
   (declare (ignore initargs slot-names))
@@ -644,6 +657,10 @@
     (setf (slot-value instance 'root) instance))
   (values))
 
+(defmethod shared-initialize :around ((instance adhoc-mixin) slot-names &rest initargs)
+  (declare (ignore initargs slot-names))
+  (prog1 (call-next-method)
+    (setf (slot-value instance 'inittest) t)))
 
 (defgeneric aggregate-lookup (aggregate &rest indices))
 
@@ -665,7 +682,8 @@
   ((value :accessor variable-value :initarg :value)
    (dependents :accessor dependents :initform nil)
    (root-path :reader variable-root-path :initarg :root-path)
-   (slot-name :reader slot-name :initarg :slot-name)))
+   (slot-name :reader slot-name :initarg :slot-name)
+   (instance :accessor variable-instance :initarg :instance)))
 
 ;; to have a place where settable-slots can differentiate between cached and setf'd
 (defclass settable-variable (variable)
@@ -683,7 +701,8 @@
    (value :reader variable-value :initarg :value)
    (dependents :accessor dependents :initform nil)
    (root-path :reader variable-root-path :initarg :root-path)
-   (slot-name :reader slot-name :initarg :slot-name))
+   (slot-name :reader slot-name :initarg :slot-name)
+   (instance :accessor instance :initarg :instance))
   (:metaclass funcallable-adhoc-class))  
 
 (defclass array-aggregate-mixin (aggregate-mixin)
@@ -788,18 +807,19 @@
 
 (defmethod slot-variable (instance (slot-name symbol))
   (let* ((class (class-of instance))
-	 (location (gethash slot-name (slot-locations class))))
+	     (location (gethash slot-name (slot-locations class))))
     (if (null location)
-	(slot-missing (class-of instance) instance slot-name 'slot-value)
-	;; if it's already there it's fast, else it's slow
-	(let ((maybe-variable (standard-instance-access-compat instance location)))
-	  (if (eq +slot-unbound+ maybe-variable)
-	      (let ((slotd (get-slot-definition class location)))
-		(setf (standard-instance-access instance location)
-		      (make-instance (variable-type slotd)
-				     :root-path (root-path2 instance) ;; this will be a slowdown
-				     :slot-name (slot-definition-name slotd))))
-	      maybe-variable)))))
+	    (slot-missing (class-of instance) instance slot-name 'slot-value)
+        ;; if it's already there it's fast, else it's slow
+	    (let ((maybe-variable (standard-instance-access-compat instance location)))
+	      (if (eq +slot-unbound+ maybe-variable)
+	          (let ((slotd (get-slot-definition class location)))
+		        (setf (standard-instance-access instance location)
+		              (make-instance (variable-type slotd)
+				                     :root-path (root-path2 instance) ;; this will be a slowdown
+				                     :slot-name (slot-definition-name slotd)
+                                     :instance instance)))
+	          maybe-variable)))))
 
 (defmethod (setf slot-variable) (variable instance (slot-name symbol))
   (let* ((class (class-of instance))
@@ -829,32 +849,34 @@
 	 ,@body))))
 
 (defun get-variable (instance slotd &optional (root nil root-present-p)
-				      (superior nil superior-present-p)
-				      (component-definition nil component-definition-present-p))
+				                      (superior nil superior-present-p)
+				                      (component-definition nil component-definition-present-p))
   (let* ((location (slot-definition-location slotd))
-	 (maybe-variable (standard-instance-access-compat instance location)))
+	     (maybe-variable (standard-instance-access-compat instance location)))
     (if (eq +slot-unbound+ maybe-variable)
-	(let* ((variable-type (variable-type slotd))
-	       (variable (apply #'make-instance variable-type
-			     :root-path (root-path2 instance) ;; this will be a slowdown
-			     :slot-name (slot-definition-name slotd)
-			     (append (when root-present-p
-				       (list :root root))
-				     (when superior-present-p
-				       (list :superior superior))
-				     (when component-definition-present-p
-				       (list :component-definition component-definition))))))
-	  (setf (standard-instance-access instance location) variable))
-	maybe-variable)))
+	    (let* ((variable-type (variable-type slotd))
+	           (variable (apply #'make-instance variable-type
+			                    :root-path (root-path2 instance) ;; this will be a slowdown
+			                    :slot-name (slot-definition-name slotd)
+                                :instance instance
+			                    (append (when root-present-p
+				                          (list :root root))
+				                        (when superior-present-p
+				                          (list :superior superior))
+				                        (when component-definition-present-p
+				                          (list :component-definition component-definition))))))
+	      (setf (standard-instance-access instance location) variable))
+	    maybe-variable)))
 
-(defun get-variable-fi (instance slotd)
+(defun get-variable-fi (owner instance slotd)
   (let* ((location (slot-definition-location slotd))
 	 (maybe-variable (funcallable-standard-instance-access instance location)))
     (if (eq +slot-unbound+ maybe-variable)
 	(let* ((variable-type (variable-type slotd))
 	       (variable (make-instance variable-type
 					:root-path (root-path2 instance) ;; this will be a slowdown
-					:slot-name (slot-definition-name slotd))))
+					:slot-name (slot-definition-name slotd)
+                    :instance owner)))
 	  (setf (funcallable-standard-instance-access instance location) variable))
 	maybe-variable)))
 
@@ -868,13 +890,17 @@
       (unbind-dependent-variables variable :force t)
       (unwind-protect
 	   (when (noticers slotd)
-	     (loop for noticer in (noticers slotd)
-		do
-		  (funcall noticer instance value)))
+	     ;; noticers will not run until inittest is set to non-nil value
+	     (when (and (slot-boundp instance 'inittest)
+			(slot-value instance 'inittest))
+	       (loop for noticer in (noticers slotd)
+		     do
+			(funcall noticer instance value))))
 	(setf (variable-status variable) :set)))))
 
 (defmethod (setf slot-value-using-class) (value (class adhoc-class) instance
 					  (slotd effective-non-settable-slot-definition-mixin))
+  (declare (ignore value instance))
   (error "slot ~S of type ~S is read only" (slot-definition-name slotd) (class-name (class-of slotd))))
 
 (defmethod slot-makunbound-using-class ((class adhoc-class) instance (slotd effective-basic-attribute-definition-mixin))
@@ -918,7 +944,7 @@
   ;; however, we only need to send notification when we are actually evaluating any code, since that is the only time
   ;; that any other attributes will be accessed, not during a cache fetch
   ;; capture-direct-dependency and with-dependent-notification perform these functions, respectively.
-  (let* ((variable (get-variable-fi instance slotd)))
+  (let* ((variable (get-variable-fi (slot-value instance 'superior) instance slotd)))
     (capture-direct-dependency variable)
     (if (slot-boundp variable 'value)
 	(slot-value variable 'value)
@@ -934,7 +960,8 @@
   (funcall (attribute-function slotd) instance))
 
 (defmethod slot-boundp-using-class ((class adhoc-class) instance
-				   (slotd effective-uncached-attribute-definition))
+				    (slotd effective-uncached-attribute-definition))
+  (declare (ignore instance))
   t)
 
 (defmethod shared-initialize :after ((instance direct-attribute-function-mixin) slot-names &rest initargs)
@@ -999,54 +1026,54 @@
 
 
 (defmethod slot-value-using-class ((class adhoc-class) instance
-				   (slotd aggregate-component-definition-mixin))
+				                   (slotd aggregate-component-definition-mixin))
   (let* ((variable (get-variable instance slotd (slot-value instance 'root) instance slotd)))
     (capture-direct-dependency variable)
     (if (slot-boundp variable 'value)
-	(slot-value variable 'value)
-	(progn
-	  (setf (slot-value variable 'value)
-		(with-dependent-notification (variable)
-		  (if (typep slotd 'table-aggregate-component-definition-mixin)
-		      (make-hash-table :test #'equalp)
-		      (let ((size (funcall (size-function slotd) instance)))
-			(make-array size :initial-element nil)))))
-	  (set-funcallable-instance-function
-	   variable
-	   #'(lambda (&rest indices)
-	       (apply #'aggregate-lookup variable indices)))))
+	    (slot-value variable 'value)
+	    (progn
+	      (setf (slot-value variable 'value)
+		        (with-dependent-notification (variable)
+		          (if (typep slotd 'table-aggregate-component-definition-mixin)
+		              (make-hash-table :test #'equalp)
+		              (let ((size (funcall (size-function slotd) instance)))
+			            (make-array size :initial-element nil)))))
+	      (set-funcallable-instance-function
+	       variable
+	       #'(lambda (&rest indices)
+	           (apply #'aggregate-lookup variable indices)))))
     variable))
   
 (defmethod slot-value-using-class ((class adhoc-class) instance
-				   (slotd effective-ordinary-input-definition))
+				                   (slotd effective-ordinary-input-definition))
   (let* ((variable (get-variable instance slotd)))
     (capture-direct-dependency variable)
     (if (slot-boundp variable 'value)
-	(slot-value variable 'value)
-	(setf (slot-value variable 'value)
-	      (flet ((unbound ()
-		       (slot-unbound class instance (slot-definition-name slotd))))
-		(let ((component-definition (component-definition instance))
-		      (initarg (first (slot-definition-initargs slotd))))
-		  (if component-definition
-		      (let* ((provided-input-function-plist (apply #'provided-inputs component-definition
-								   (slot-value instance 'indices))))
-			(flet ((normal-lookup ()
-				 (let ((input-function (getf provided-input-function-plist initarg)))
-				   (if input-function
-				       (with-dependent-notification (variable)
-					 (funcall input-function (superior instance) instance))
-				       (unbound)))))
-			  (let ((plist-function (getf provided-input-function-plist :@)))
-			    (if plist-function
-				(let ((plist (with-dependent-notification (variable)
-					       (funcall plist-function (superior instance) instance))))
-				  (let ((result (getf plist initarg +slot-unbound+)))
-				    (if (eq result +slot-unbound+)
-					(normal-lookup)
-					result)))
-				(normal-lookup)))))
-		      (unbound))))))))
+	    (slot-value variable 'value)
+	    (setf (slot-value variable 'value)
+	          (flet ((unbound ()
+		               (slot-unbound class instance (slot-definition-name slotd))))
+		        (let ((component-definition (component-definition instance))
+		              (initarg (first (slot-definition-initargs slotd))))
+		          (if component-definition
+		              (let* ((provided-input-function-plist (apply #'provided-inputs component-definition
+								                                   (slot-value instance 'indices))))
+			            (flet ((normal-lookup ()
+				                 (let ((input-function (getf provided-input-function-plist initarg)))
+				                   (if input-function
+				                       (with-dependent-notification (variable)
+					                     (funcall input-function (superior instance) instance))
+				                       (unbound)))))
+			              (let ((plist-function (getf provided-input-function-plist :@)))
+			                (if plist-function
+				                (let ((plist (with-dependent-notification (variable)
+					                           (funcall plist-function (superior instance) instance))))
+				                  (let ((result (getf plist initarg +slot-unbound+)))
+				                    (if (eq result +slot-unbound+)
+					                    (normal-lookup)
+					                    result)))
+				                (normal-lookup)))))
+		              (unbound))))))))
 
 (defmethod slot-value-using-class ((class adhoc-class) instance
 				   (slotd effective-optional-input-definition))
@@ -1160,57 +1187,57 @@
 
 (defmethod aggregate-lookup ((aggregate table-aggregate) &rest indices)
   (let* ((table (slot-value aggregate 'value))
-	 (element (gethash indices table nil)))
+	     (element (gethash indices table nil)))
     (if element
-	(progn (capture-direct-dependency aggregate) element)
+	    (progn (capture-direct-dependency aggregate) element)
 	
-	(if (member indices (with-dependent-notification (aggregate)
-			      (send aggregate indices))
-		    :test #'equalp)
-	    (progn (capture-direct-dependency aggregate)
-		   (setf (gethash indices table)
-			 (make-instance (with-dependent-notification (aggregate)
-					  (apply (type-function (component-definition aggregate))
-						 (superior aggregate)
-						 indices))
-					:root (slot-value aggregate 'root)
-					:superior (slot-value aggregate 'superior)
-					:component-definition (component-definition aggregate)
-					:aggregate aggregate
-					:indices indices)))
-	    (error "~S is not an active index" indices)))))
+	    (if (member indices (with-dependent-notification (aggregate)
+			                  (send aggregate indices))
+		            :test #'equalp)
+	        (progn (capture-direct-dependency aggregate)
+		           (setf (gethash indices table)
+			             (make-instance (with-dependent-notification (aggregate)
+					                      (apply (type-function (component-definition aggregate))
+						                         (superior aggregate)
+						                         indices))
+					                    :root (slot-value aggregate 'root)
+					                    :superior (slot-value aggregate 'superior)
+					                    :component-definition (component-definition aggregate)
+					                    :aggregate aggregate
+					                    :indices indices)))
+	        (error "~S is not an active index" indices)))))
 
 (defmethod aggregate-lookup ((aggregate array-aggregate) &rest indices)
   (let* ((array (slot-value aggregate 'value))
-	 (element (handler-bind ((#+SBCL sb-int:invalid-array-index-error
-				  #+CCL error
-				  #'(lambda (e)
-				      (declare (ignore e))
-				      (error "Aggregate indices ~S for ~S on ~S not found."
-					     indices
-					     (slot-value aggregate 'slot-name)
-					     (superior aggregate)))))
-		    (apply #'aref array indices))))
+	     (element (handler-bind ((#+SBCL sb-int:invalid-array-index-error
+				                  #+CCL error
+				                  #'(lambda (e)
+				                      (declare (ignore e))
+				                      (error "Aggregate indices ~S for ~S on ~S not found."
+					                         indices
+					                         (slot-value aggregate 'slot-name)
+					                         (superior aggregate)))))
+		            (apply #'aref array indices))))
 
     (if element
-	(progn
-	  (capture-direct-dependency aggregate)
-	  element)
-	(flet ((new-instance ()
-		 (with-dependent-notification (aggregate)
-		   ;; to capture the dependency of the child object in any slot size-function calls
-		   (send aggregate size)
-		   (make-instance (apply (type-function (component-definition aggregate))
-					 (superior aggregate)
-					 indices)
-				  :root (slot-value aggregate 'root)
-				  :superior (slot-value aggregate 'superior)
-				  :component-definition (component-definition aggregate)
-				  :aggregate aggregate
-				  :indices indices))))
-	  (capture-direct-dependency aggregate)
-	  (setf (apply #'aref array indices)
-		(new-instance))))))
+	    (progn
+	      (capture-direct-dependency aggregate)
+	      element)
+	    (flet ((new-instance ()
+		         (with-dependent-notification (aggregate)
+                   ;; to capture the dependency of the child object in any slot size-function calls
+		           (send aggregate size)
+		           (make-instance (apply (type-function (component-definition aggregate))
+					                     (superior aggregate)
+					                     indices)
+				                  :root (slot-value aggregate 'root)
+				                  :superior (slot-value aggregate 'superior)
+				                  :component-definition (component-definition aggregate)
+				                  :aggregate aggregate
+				                  :indices indices))))
+	      (capture-direct-dependency aggregate)
+	      (setf (apply #'aref array indices)
+		        (new-instance))))))
 
 (defmethod unbind-this-variable ((variable variable))
   (slot-makunbound variable 'value)
@@ -1229,10 +1256,10 @@
 (defmethod unbind-dependent-variables (variable &key force)
   (declare (ignore force))
   (loop while (dependents variable)
-     do
-       (let ((dependent-variable (pop (dependents variable))))
-	 (unwind-protect (unbind-dependent-variables dependent-variable)
-	   (unbind-this-variable dependent-variable)))))
+	do
+	   (let ((dependent-variable (pop (dependents variable))))
+	     (unwind-protect (unbind-dependent-variables dependent-variable)
+	       (unbind-this-variable dependent-variable)))))
 
 (defmethod unbind-dependent-variables ((variable settable-variable) &key (force nil))
   (if (eq (variable-status variable) :set)
@@ -1244,10 +1271,10 @@
 (defmethod unbind-dependent-variables ((variable array-aggregate-mixin) &key force)
   (declare (ignore force))
   (unwind-protect (when (slot-boundp variable 'value)
-			(let ((value (slot-value variable 'value)))
-			  (loop for element across value
-			     when element
-			     do (unbind-instance-variables element))))
+		    (let ((value (slot-value variable 'value)))
+		      (loop for element across value
+			    when element
+			      do (unbind-instance-variables element))))
     (call-next-method))
   (values))
 
@@ -1269,15 +1296,15 @@
 
 (defun unbind-instance-variables (instance)
   (let* ((class (class-of instance))
-	 (eslotds (class-slots class)))
+	     (eslotds (class-slots class)))
     (loop for eslotd in eslotds
-       when (and (typep eslotd 'basic-attribute-definition-mixin)
-		 (let ((allocation (slot-definition-allocation eslotd)))
-		   (and allocation (not (eq allocation :none)))))
-       do (let ((maybe-variable (standard-instance-access-compat instance (slot-definition-location eslotd))))
-	    (unless (eq +slot-unbound+ maybe-variable)
-	      (unwind-protect (unbind-dependent-variables maybe-variable)
-		(unbind-this-variable maybe-variable)))))
+          when (and (typep eslotd 'basic-attribute-definition-mixin)
+		            (let ((allocation (slot-definition-allocation eslotd)))
+		              (and allocation (not (eq allocation :none)))))
+            do (let ((maybe-variable (standard-instance-access-compat instance (slot-definition-location eslotd))))
+	             (unless (eq +slot-unbound+ maybe-variable)
+	               (unwind-protect (unbind-dependent-variables maybe-variable)
+		             (unbind-this-variable maybe-variable)))))
     (values)))
   
       
@@ -1334,7 +1361,7 @@
 		  (slot-definition-name slotd)
 		  (list* (slot-definition-name slotd) (the indices)))
 	      (slot-definition-name slotd)))))
-      (list :root)))
+      (list 'root)))
 
 (defmacro the-part (&rest messages)
   `(send part ,@messages))
@@ -1342,27 +1369,27 @@
 
 (defmethod get-object-children ((object adhoc-mixin))
   (let* ((class (class-of object)))
-    (finalize-inheritance class) ;; todo: find lighter weight method
+    (finalize-inheritance-lite class)
     (when *dependent*
       (pushnew *dependent* (children-dependents class) :test #'eq))
     (let ((eslotds (component-eslotds class)))
       (loop for eslotd in eslotds
-	 append (let ((c (slot-value-using-class class object eslotd)))
-		   (if (typep c 'array-aggregate)
-		       (send c list-elements)
-		       (list c)))))))
+	        append (let ((c (slot-value-using-class class object eslotd)))
+		             (if (typep c 'aggregate-mixin)
+		                 (send c list-elements)
+		                 (list c)))))))
 
 (defmethod get-hidden-children ((object adhoc-mixin))
   (let* ((class (class-of object)))
-    (finalize-inheritance class) ;; todo: find lighter weight method
+    (finalize-inheritance-lite class)
     (when *dependent*
       (pushnew *dependent* (children-dependents class) :test #'eq))
     (let ((eslotds (hidden-component-eslotds class)))
       (loop for eslotd in eslotds
-	 append (let ((c (slot-value-using-class class object eslotd)))
-		  (if (typep c 'array-aggregate)
-		      (send c list-elements)
-		      (list c)))))))
+	        append (let ((c (slot-value-using-class class object eslotd)))
+		             (if (typep c 'aggregate-mixin)
+		                 (send c list-elements)
+		                 (list c)))))))
 		    
 
 (defparameter *descending-attributes* nil)
@@ -1735,17 +1762,18 @@
   (let ((*slots-table* (make-hash-table)))
     (let* ((metaclass nil)
 	   (all-slots
-	    (loop for (keyword section) on body by #'cddr
-	       append (ecase keyword
-			(:metaclass (if (and (symbolp section) (not (keywordp section)))
-					(progn (setq metaclass section)
-					       nil)
-					(error "invalid metaclass: ~S" section)))
-			(:slots (parse-slots-section class-name section))
-			(:inputs (parse-inputs-section class-name section))
-			(:attributes (parse-attributes-section class-name section))
-			(:components (parse-components-section class-name section))
-			(:hidden-components (parse-components-section class-name section :hidden? t))))))
+	     (append
+	      (loop for (keyword section) on body by #'cddr
+		    append (ecase keyword
+			     (:metaclass (if (and (symbolp section) (not (keywordp section)))
+					     (progn (setq metaclass section)
+						    nil)
+					     (error "invalid metaclass: ~S" section)))
+			     (:slots (parse-slots-section class-name section))
+			     (:inputs (parse-inputs-section class-name section))
+			     (:attributes (parse-attributes-section class-name section))
+			     (:components (parse-components-section class-name section))
+			     (:hidden-components (parse-components-section class-name section :hidden? t)))))))
       (values all-slots metaclass))))
 
 ;; forward declare object for defobject macro
@@ -1791,7 +1819,7 @@
   (let* ((class (class-of previous))
 	 (slotds (class-slots class))
 	 (old-location nil))
-    
+
     (loop for old-slotd in slotds
        when (and (typep old-slotd 'basic-attribute-definition-mixin)
 		 (eq (slot-definition-allocation old-slotd) :instance)
@@ -1819,32 +1847,52 @@
 		      (setf (slot-value (setf (standard-instance-access current (slot-definition-location new-slotd))
 					      (make-instance (variable-type new-slotd)
 							     :root-path (root-path2 current)
-							     :slot-name (slot-definition-name new-slotd)))
+							     :slot-name (slot-definition-name new-slotd)
+                                 :instance current))
 					'value)
 			    transferred-value)))
 		  (setf (standard-instance-access current (slot-definition-location new-slotd)) +slot-unbound+))))))
   (values))
 
-(defmethod update-instance-for-redefined-class :before
-    ;; maybe this needs to be an :around method
+(defmethod update-instance-for-redefined-class
     ((instance object) added-slots discarded-slots property-list &rest initargs)
   (declare (ignore added-slots discarded-slots initargs))
-  
-  (loop for (discarded-slot value) on property-list by #'cddr
-     when (typep value 'variable)
-     do (unwind-protect (unbind-this-variable value)
-	  (unbind-dependent-variables value)))
+
+  ;; todo: need to set the slots which are not generative
+  ;; with the old value of the slot as if shared-initialize were doing it
+  ;; but we do not actually want shared-initialize to run
+  ;; or possibly an opaque shared-initialize could be implemented
+  ;; for adhoc 'object' and then this could be a :before method
+
+  (loop for value in property-list by #'cddr
+        when (typep value 'variable)
+          do (unwind-protect (unbind-this-variable value)
+	       (unbind-dependent-variables value)))
 
   ;; conservative approach: blast all adhoc data
-
+  
+  #+sbcl
   (let ((slotv (sb-pcl::std-instance-slots instance)))
     (loop for maybe-variable across slotv for i from 0
-       do (unless (eq maybe-variable +slot-unbound+)
-	    (when (typep maybe-variable 'variable)
-	      (unwind-protect
-		   (unwind-protect (unbind-this-variable maybe-variable)
-		     (unbind-dependent-variables maybe-variable))
-		(setf (svref slotv i) +slot-unbound+))))))
+          do (unless (eq maybe-variable +slot-unbound+)
+	       (when (typep maybe-variable 'variable)
+	         (unwind-protect
+		      (unwind-protect (unbind-this-variable maybe-variable)
+		        (unbind-dependent-variables maybe-variable))
+		   (setf (svref slotv i) +slot-unbound+))))))
+
+  #+ccl 
+  (let* ((slotv (ccl::instance-slots instance))
+	 (size (ccl::uvsize slotv)))
+    (dotimes (i size)
+      (let ((maybe-variable (ccl::%svref slotv i)))
+	(unless (eq maybe-variable (ccl::%slot-unbound-marker))
+	  (when (typep maybe-variable 'variable)
+	    (unwind-protect
+		 (unwind-protect (unbind-this-variable maybe-variable)
+		   (unbind-dependent-variables maybe-variable))
+	      (setf (ccl::%svref slotv i) (ccl::%slot-unbound-marker))))))))
+  
 
   ;; less conservative approach, save settable slot values, save variable
   #+NIL
@@ -1852,31 +1900,31 @@
 	 (slotds (class-slots class))
 	 (location))
     (loop for slotd in slotds
-       when (and (typep slotd 'basic-attribute-definition-mixin) ;; we're only dealing with adhoc slots here
-		 (eq (slot-definition-allocation slotd) :instance) ;; we're not dealing with uncached slots
-		 (setq location (slot-definition-location slotd)))  ;; reality check. location non-nil.
-       do (let ((maybe-variable (standard-instance-access-compat instance location)))
-	    (typecase maybe-variable
-	      (aggregate-mixin
-	       (unwind-protect (unbind-this-variable maybe-variable)
-		 (unwind-protect (unbind-dependent-variables maybe-variable)
-		   (setf (standard-instance-access instance location) +slot-unbound+))))	       
-	      (settable-variable
-	       (typecase slotd
-		 (effective-settable-slot-definition-mixin
-		  (change-class maybe-variable (variable-type slotd)))
-		 (basic-attribute-definition-mixin
-		  ;; a settable slot was changed to be a non-settable slot
-		  ;; discard value.
-		  (unwind-protect (unbind-this-variable maybe-variable)
-		    (unwind-protect (unbind-dependent-variables maybe-variable)
-		      (setf (standard-instance-access instance location) +slot-unbound+))))))
-	      (variable
-	       (when (typep slotd 'basic-attribute-definition-mixin)
-		 ;; slot is still an adhoc slot
-		 (unwind-protect (unbind-this-variable maybe-variable)
-		   (unwind-protect (unbind-dependent-variables maybe-variable)
-		     (setf (standard-instance-access instance location) +slot-unbound+)))))))))
+          when (and (typep slotd 'basic-attribute-definition-mixin) ;; we're only dealing with adhoc slots here
+		    (eq (slot-definition-allocation slotd) :instance) ;; we're not dealing with uncached slots
+		    (setq location (slot-definition-location slotd))) ;; reality check. location non-nil.
+            do (let ((maybe-variable (standard-instance-access-compat instance location)))
+	         (typecase maybe-variable
+	           (aggregate-mixin
+	            (unwind-protect (unbind-this-variable maybe-variable)
+		      (unwind-protect (unbind-dependent-variables maybe-variable)
+		        (setf (standard-instance-access instance location) +slot-unbound+))))
+	           (settable-variable
+	            (typecase slotd
+		      (effective-settable-slot-definition-mixin
+		       (change-class maybe-variable (variable-type slotd)))
+		      (basic-attribute-definition-mixin
+                       ;; a settable slot was changed to be a non-settable slot
+                       ;; discard value.
+		       (unwind-protect (unbind-this-variable maybe-variable)
+		         (unwind-protect (unbind-dependent-variables maybe-variable)
+		           (setf (standard-instance-access instance location) +slot-unbound+))))))
+	           (variable
+	            (when (typep slotd 'basic-attribute-definition-mixin)
+                      ;; slot is still an adhoc slot
+		      (unwind-protect (unbind-this-variable maybe-variable)
+		        (unwind-protect (unbind-dependent-variables maybe-variable)
+		          (setf (standard-instance-access instance location) +slot-unbound+)))))))))
   (values))
 
 
@@ -1885,127 +1933,140 @@
     (multiple-value-bind (slots metaclass) (parse-defobject-body name body)
       (defobject-expansion name supers slots (or metaclass 'adhoc-class)))))
 
+(ensure-class 'null-object
+	      :metaclass 'adhoc-class
+	      :direct-superclasses '(adhoc-mixin))	      
+
+(defmethod null-object-p (self)
+  nil)
+
+(defmethod null-object-p ((self null-object))
+  t)
+
 
 
 ;; define object and its slots for real (without using defobject)
 (ensure-class 'object
-	      :metaclass 'adhoc-class
-	      :direct-superclasses '(adhoc-mixin)
-	      :direct-slots
-	      (list
-	       (list :name 'index
-		     :slot-class :ordinary-attribute
-		     :function
-		     (lambda (next-emfun self)
-		       (declare (ignore next-emfun))
-		       (funcall
-			(named-lambda (:attribute
-				       (root-path object))
-			    (self)
-			  (declare (type object self))
-			  (let ((indices (the indices)))
-			    (when (null (cdr indices))
-			      (car indices))))
-			self))
-		     :body
-		     '((let ((indices (the indices)))
-			 (when (null (cdr indices))
-			   (car indices)))))
-	       (list :name 'children
-		     :slot-class :ordinary-attribute
-		     :function
-		     (lambda (next-emfun self)
-		       (declare (ignore next-emfun))
-		       (funcall
-			(named-lambda (:attribute
-				       (children object))
-			    (self)
-			  (declare (type object self))
-			  (get-object-children self))
-			self))
-		     :body '((get-object-children self)))
-	       (list :name 'root-path
-		     :slot-class :ordinary-attribute
-		     :function
-		     (lambda (next-emfun self)
-		       (declare (ignore next-emfun))
-		       (funcall
-			(named-lambda (:attribute
-				       (root-path object))
-			    (self)
-			  (declare (type object self))
-			  (root-path self))
-			self))
-		     :body
-		     '((root-path self))))
-	      :direct-descending-attributes 'nil)
+	          :metaclass 'adhoc-class
+	          :direct-superclasses '(adhoc-mixin)
+	          :direct-slots
+              (list
+	           (list :name 'index
+		             :slot-class :ordinary-attribute
+		             :function
+		             (lambda (next-emfun self)
+		               (declare (ignore next-emfun))
+		               (funcall
+			            (named-lambda (:attribute
+				                       (root-path object))
+			                (self)
+			              (declare (type object self))
+			              (let ((indices (the indices)))
+			                (when (null (cdr indices))
+			                  (car indices))))
+			            self))
+		             :body
+		             '((let ((indices (the indices)))
+			             (when (null (cdr indices))
+			               (car indices)))))
+	           (list :name 'children
+		             :slot-class :ordinary-attribute
+		             :function
+		             (lambda (next-emfun self)
+		               (declare (ignore next-emfun))
+		               (funcall
+			            (named-lambda (:attribute
+				                       (children object))
+			                (self)
+			              (declare (type object self))
+				      (remove-if #'null-object-p
+						 (get-object-children self)))
+			            self))
+		             :body '((get-object-children self)))
+	           (list :name 'root-path
+		             :slot-class :ordinary-attribute
+		             :function
+		             (lambda (next-emfun self)
+		               (declare (ignore next-emfun))
+		               (funcall
+			            (named-lambda (:attribute
+				                       (root-path object))
+			                (self)
+			              (declare (type object self))
+			              (root-path self))
+			            self))
+		             :body
+		             '((root-path self))))
+	          :direct-descending-attributes 'nil)
 
 ;; upgrade array-aggregate to include adhoc style messages:
 (ensure-class 'array-aggregate
-	      :metaclass 'funcallable-adhoc-class
-	      :direct-superclasses '(array-aggregate-mixin)
-	      :direct-slots
-	      (list
-	       (list :name 'size
-		     :slot-class :ordinary-attribute
-		     :function
-		     (named-lambda (:attribute (size array-aggregate))
-			 (next-emfun aggregate)
-		       (declare (ignore next-emfun))
-		       (declare (type array-aggregate aggregate))
-		       (funcall (size-function (component-definition aggregate)) (superior aggregate))))
-	       (list :name 'list-elements
-		     :slot-class :ordinary-attribute
-		     :function
-		     (named-lambda (:attribute
-				    (list-elements array-aggregate))
-			 (next-emfun aggregate)
-		       (declare (ignore next-emfun))
-		       (declare (type array-aggregate aggregate))
-		       (labels ((list-rank (dims &rest indices)
-				  (when dims
-				    (let ((dim (car dims)))
-				      (loop for i from 0 below dim
-					    append (if (null (cdr dims))
-						       (list (apply aggregate (cons i indices)))
-						       (apply #'list-rank (cdr dims) i indices)))))))
-			 (let ((dims (array-dimensions (slot-value aggregate 'value))))
-			   (list-rank (reverse dims)))))
-		     :body '((labels ((list-rank (dims &rest indices)
-					(when dims
-					  (let ((dim (car dims)))
-					    (loop for i from 0 below dim
-					       append (if (null (cdr dims))
-							  (list (apply aggregate (cons i indices)))
-							  (apply #'list-rank (cdr dims) i indices)))))))
-			       (let ((dims (array-dimensions (slot-value aggregate 'value))))
-				 (list-rank (reverse dims))))))))
+	          :metaclass 'funcallable-adhoc-class
+	          :direct-superclasses '(array-aggregate-mixin)
+	          :direct-slots
+	          (list
+	           (list :name 'size
+		             :slot-class :ordinary-attribute
+		             :function
+		             (named-lambda (:attribute (size array-aggregate))
+			             (next-emfun aggregate)
+		               (declare (ignore next-emfun))
+		               (declare (type array-aggregate aggregate))
+		               (funcall (size-function (component-definition aggregate)) (superior aggregate))))
+	           (list :name 'list-elements
+		             :slot-class :ordinary-attribute
+		             :function
+		             (named-lambda (:attribute
+				                    (list-elements array-aggregate))
+			             (next-emfun aggregate)
+		               (declare (ignore next-emfun))
+		               (declare (type array-aggregate aggregate))
+		               (labels ((list-rank (dims &rest indices)
+				                  (when dims
+				                    (let ((dim (car dims)))
+				                      (loop for i from 0 below dim
+					                        append (if (null (cdr dims))
+						                               (list (apply aggregate (cons i indices)))
+						                               (apply #'list-rank (cdr dims) i indices)))))))
+			             (let* ((%size (send aggregate size))
+                                (dims (if (consp %size) %size (list %size))
+                                     #+NO(array-dimensions (slot-value aggregate 'value))))
+			               (list-rank (reverse dims)))))
+		             :body '((labels ((list-rank (dims &rest indices)
+					                    (when dims
+					                      (let ((dim (car dims)))
+					                        (loop for i from 0 below dim
+					                              append (if (null (cdr dims))
+							                                 (list (apply aggregate (cons i indices)))
+							                                 (apply #'list-rank (cdr dims) i indices)))))))
+			                   (let ((dims (array-dimensions (slot-value aggregate 'value))))
+				                 (list-rank (reverse dims))))))))
 
 (ensure-class 'table-aggregate
-	      :metaclass 'funcallable-adhoc-class
-	      :direct-superclasses '(table-aggregate-mixin)
-	      :direct-slots
-	      (list
-	       (list :name 'indices
-		     :slot-class :ordinary-attribute
-		     :function
-		     (named-lambda (:attribute (indices table-aggregate))
-			 (next-emfun aggregate)
-		       (declare (ignore next-emfun))
-		       (declare (type table-aggregate aggregate))
-			 (funcall (indices-function (component-definition aggregate)) (superior aggregate))))
-	       (list :name 'list-elements
-		     :slot-class :ordinary-attribute
-		     :function
-		     (named-lambda (:attribute
-				    (list-elements table-aggregate))
-			 (next-emfun aggregate)
-		       (declare (ignore next-emfun))
-		       (declare (type table-aggregate aggregate))
-		       (loop for indices in (send aggregate indices)
-			     collect (apply #'aggregate-lookup aggregate indices)))
-		     :body '((loop for indices in (send aggregate indices)
-				collect (apply #'aggregate-lookup aggregate indices))))))
+	          :metaclass 'funcallable-adhoc-class
+	          :direct-superclasses '(table-aggregate-mixin)
+	          :direct-slots
+	          (list
+	           (list :name 'indices
+		             :slot-class :ordinary-attribute
+		             :function
+		             (named-lambda (:attribute (indices table-aggregate))
+			             (next-emfun aggregate)
+		               (declare (ignore next-emfun))
+		               (declare (type table-aggregate aggregate))
+			           (funcall (indices-function (component-definition aggregate)) (superior aggregate))))
+	           (list :name 'list-elements
+		             :slot-class :ordinary-attribute
+		             :function
+		             (named-lambda (:attribute
+				                    (list-elements table-aggregate))
+			             (next-emfun aggregate)
+		               (declare (ignore next-emfun))
+		               (declare (type table-aggregate aggregate))
+		               (loop for indices in (send aggregate indices)
+			                 collect (apply #'aggregate-lookup aggregate indices)))
+		             :body '((loop for indices in (send aggregate indices)
+				                   collect (apply #'aggregate-lookup aggregate indices))))))
 
 (defmethod emit-defobject-body ((class adhoc-class) &optional add remove rename)
   (let* ((result ())
@@ -2071,3 +2132,4 @@
 			     (:components
 			      ((,slot-name :type ,type-expression
 				,@provided-inputs))))))))
+
