@@ -1296,15 +1296,16 @@
 
 (defun unbind-instance-variables (instance)
   (let* ((class (class-of instance))
-	     (eslotds (class-slots class)))
+	 (eslotds (class-slots class)))
     (loop for eslotd in eslotds
           when (and (typep eslotd 'basic-attribute-definition-mixin)
-		            (let ((allocation (slot-definition-allocation eslotd)))
-		              (and allocation (not (eq allocation :none)))))
-            do (let ((maybe-variable (standard-instance-access-compat instance (slot-definition-location eslotd))))
-	             (unless (eq +slot-unbound+ maybe-variable)
-	               (unwind-protect (unbind-dependent-variables maybe-variable)
-		             (unbind-this-variable maybe-variable)))))
+		    (let ((allocation (slot-definition-allocation eslotd)))
+		      (and allocation (not (eq allocation :none)))))
+       do (let ((maybe-variable (standard-instance-access-compat instance (slot-definition-location eslotd))))
+	    (unless (eq +slot-unbound+ maybe-variable)
+	      (when (variable-p maybe-variable)
+		(unwind-protect (unbind-dependent-variables maybe-variable)
+		  (unbind-this-variable maybe-variable))))))
     (values)))
   
       
