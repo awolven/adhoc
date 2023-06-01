@@ -733,12 +733,14 @@
 (defmethod print-object ((object array-aggregate) stream)
   (print-unreadable-object (object stream)
     (princ "ARRAY-AGGREGATE " stream)
+    #+NOTYET
     (when (slot-boundp object 'slot-name)
       (princ (slot-name object) stream))))
 
 (defmethod print-object ((object table-aggregate) stream)
   (print-unreadable-object (object stream)
     (princ "TABLE-AGGREGATE " stream)
+    #+NOTYET
     (when (slot-boundp object 'slot-name)
       (princ (slot-name object) stream))))
 
@@ -807,19 +809,19 @@
 
 (defmethod slot-variable (instance (slot-name symbol))
   (let* ((class (class-of instance))
-	     (location (gethash slot-name (slot-locations class))))
+	 (location (gethash slot-name (slot-locations class))))
     (if (null location)
-	    (slot-missing (class-of instance) instance slot-name 'slot-value)
+	(slot-missing (class-of instance) instance slot-name 'slot-value)
         ;; if it's already there it's fast, else it's slow
-	    (let ((maybe-variable (standard-instance-access-compat instance location)))
-	      (if (eq +slot-unbound+ maybe-variable)
-	          (let ((slotd (get-slot-definition class location)))
-		        (setf (standard-instance-access instance location)
-		              (make-instance (variable-type slotd)
-				                     :root-path (root-path2 instance) ;; this will be a slowdown
-				                     :slot-name (slot-definition-name slotd)
+	(let ((maybe-variable (standard-instance-access-compat instance location)))
+	  (if (eq +slot-unbound+ maybe-variable)
+	      (let ((slotd (get-slot-definition class location)))
+		(setf (standard-instance-access instance location)
+		      (make-instance (variable-type slotd)
+				     :root-path (root-path2 instance) ;; this will be a slowdown
+				     :slot-name (slot-definition-name slotd)
                                      :instance instance)))
-	          maybe-variable)))))
+	      maybe-variable)))))
 
 (defmethod (setf slot-variable) (variable instance (slot-name symbol))
   (let* ((class (class-of instance))
@@ -849,24 +851,24 @@
 	 ,@body))))
 
 (defun get-variable (instance slotd &optional (root nil root-present-p)
-				                      (superior nil superior-present-p)
-				                      (component-definition nil component-definition-present-p))
+				      (superior nil superior-present-p)
+				      (component-definition nil component-definition-present-p))
   (let* ((location (slot-definition-location slotd))
-	     (maybe-variable (standard-instance-access-compat instance location)))
+	 (maybe-variable (standard-instance-access-compat instance location)))
     (if (eq +slot-unbound+ maybe-variable)
-	    (let* ((variable-type (variable-type slotd))
-	           (variable (apply #'make-instance variable-type
-			                    :root-path (root-path2 instance) ;; this will be a slowdown
-			                    :slot-name (slot-definition-name slotd)
+	(let* ((variable-type (variable-type slotd))
+	       (variable (apply #'make-instance variable-type
+			        :root-path (root-path2 instance) ;; this will be a slowdown
+			        :slot-name (slot-definition-name slotd)
                                 :instance instance
-			                    (append (when root-present-p
-				                          (list :root root))
-				                        (when superior-present-p
-				                          (list :superior superior))
-				                        (when component-definition-present-p
-				                          (list :component-definition component-definition))))))
-	      (setf (standard-instance-access instance location) variable))
-	    maybe-variable)))
+			        (append (when root-present-p
+				          (list :root root))
+				        (when superior-present-p
+				          (list :superior superior))
+				        (when component-definition-present-p
+				          (list :component-definition component-definition))))))
+	  (setf (standard-instance-access instance location) variable))
+	maybe-variable)))
 
 (defun get-variable-fi (owner instance slotd)
   (let* ((location (slot-definition-location slotd))
@@ -1026,22 +1028,22 @@
 
 
 (defmethod slot-value-using-class ((class adhoc-class) instance
-				                   (slotd aggregate-component-definition-mixin))
+				   (slotd aggregate-component-definition-mixin))
   (let* ((variable (get-variable instance slotd (slot-value instance 'root) instance slotd)))
     (capture-direct-dependency variable)
     (if (slot-boundp variable 'value)
-	    (slot-value variable 'value)
-	    (progn
-	      (setf (slot-value variable 'value)
-		        (with-dependent-notification (variable)
-		          (if (typep slotd 'table-aggregate-component-definition-mixin)
-		              (make-hash-table :test #'equalp)
-		              (let ((size (funcall (size-function slotd) instance)))
-			            (make-array size :initial-element nil)))))
-	      (set-funcallable-instance-function
-	       variable
-	       #'(lambda (&rest indices)
-	           (apply #'aggregate-lookup variable indices)))))
+	(slot-value variable 'value)
+	(progn
+	  (setf (slot-value variable 'value)
+		(with-dependent-notification (variable)
+		  (if (typep slotd 'table-aggregate-component-definition-mixin)
+		      (make-hash-table :test #'equalp)
+		      (let ((size (funcall (size-function slotd) instance)))
+			(make-array size :initial-element nil)))))
+	  (set-funcallable-instance-function
+	   variable
+	   #'(lambda (&rest indices)
+	       (apply #'aggregate-lookup variable indices)))))
     variable))
   
 (defmethod slot-value-using-class ((class adhoc-class) instance
