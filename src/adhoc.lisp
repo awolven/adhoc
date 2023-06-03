@@ -1881,12 +1881,10 @@
 
   ;; first, unbind dependents for any slot we're losing:
   (loop for value in property-list by #'cddr
-     when (typep value 'variable)
-     do (unwind-protect (unbind-this-variable value)
-	  (unbind-dependent-variables value)))
+	when (variable-p value)
+	  do (unwind-protect (unbind-this-variable value)
+	       (unbind-dependent-variables value)))
 
-  ;; conservative approach: blast all adhoc data
-  
   #+sbcl
   ;; for all variables in the slot vector, except set settable variables which are still going to be in setttable slots
   ;; blow away generative data
@@ -1896,65 +1894,42 @@
 			       (class-slots (class-of instance)))))
 			       
     (loop for maybe-variable across slotv
-       for i from 0
-       for slotd in slotds
-       unless (= i (slot-definition-location slotd))
-       do (error "slotd location does not match slotv index.")
-       do (unless (eq maybe-variable +slot-unbound+)
-	    (when (variable-p maybe-variable)
-	      ;; preserve values of :set settable slots which are still settable-slots.
-	      (unless (and (typep slotd 'settable-slot-definition-mixin)
-			   (typep maybe-variable 'settable-variable)
-			   (eq :set (variable-status maybe-variable)))
-		(unwind-protect
-		     (unwind-protect (unbind-this-variable maybe-variable)
-		       (unbind-dependent-variables maybe-variable))
-		  (setf (svref slotv i) +slot-unbound+)))))))
+	  for i from 0
+	  for slotd in slotds
+	  unless (= i (slot-definition-location slotd))
+	    do (error "slotd location does not match slotv index.")
+	  do (unless (eq maybe-variable +slot-unbound+)
+	       (when (variable-p maybe-variable)
+		 ;; preserve values of :set settable slots which are still settable-slots.
+		 (unless (and (typep slotd 'settable-slot-definition-mixin)
+			      (typep maybe-variable 'settable-variable)
+			      (eq :set (variable-status maybe-variable)))
+		   (unwind-protect
+			(unwind-protect (unbind-this-variable maybe-variable)
+			  (unbind-dependent-variables maybe-variable))
+		     (setf (svref slotv i) +slot-unbound+)))))))
 
   #+ccl 
   (let* ((slotv (ccl::instance-slots instance))
-	 (size (ccl::uvsize slotv)))
-    (dotimes (i size)
-      (let ((maybe-variable (ccl::%svref slotv i)))
-	(unless (eq maybe-variable (ccl::%slot-unbound-marker))
-	  (when (variablep maybe-variable)
-	    (unwind-protect
-		 (unwind-protect (unbind-this-variable maybe-variable)
-		   (unbind-dependent-variables maybe-variable))
-	      (setf (ccl::%svref slotv i) (ccl::%slot-unbound-marker))))))))
-  
-
-  ;; less conservative approach, save settable slot values, save variable
-  #+NIL
-  (let* ((class (class-of instance))
-	 (slotds (class-slots class))
-	 (location))
-    (loop for slotd in slotds
-       when (and (typep slotd 'basic-attribute-definition-mixin) ;; we're only dealing with adhoc slots here
-		 (eq (slot-definition-allocation slotd) :instance) ;; we're not dealing with uncached slots
-		 (setq location (slot-definition-location slotd))) ;; reality check. location non-nil.
-       do (let ((maybe-variable (standard-instance-access-compat instance location)))
-	    (typecase maybe-variable
-	      (aggregate-mixin
-	       (unwind-protect (unbind-this-variable maybe-variable)
-		 (unwind-protect (unbind-dependent-variables maybe-variable)
-		   (setf (standard-instance-access instance location) +slot-unbound+))))
-	      (settable-variable
-	       (typecase slotd
-		 (effective-settable-slot-definition-mixin
-		  (change-class maybe-variable (variable-type slotd)))
-		 (basic-attribute-definition-mixin
-		  ;; a settable slot was changed to be a non-settable slot
-		  ;; discard value.
-		  (unwind-protect (unbind-this-variable maybe-variable)
-		    (unwind-protect (unbind-dependent-variables maybe-variable)
-		      (setf (standard-instance-access instance location) +slot-unbound+))))))
-	      (variable
-	       (when (typep slotd 'basic-attribute-definition-mixin)
-		 ;; slot is still an adhoc slot
-		 (unwind-protect (unbind-this-variable maybe-variable)
-		   (unwind-protect (unbind-dependent-variables maybe-variable)
-		     (setf (standard-instance-access instance location) +slot-unbound+)))))))))
+	 (size (ccl::uvsize slotv))
+	 (slotds (remove-if-not #'(lambda (slotd)
+				    (eq :instance (slot-definition-allocation slotd)))
+				(class-slots (class-of instance)))))
+    (loop for i from 1 below size
+	  for slotd in slotds
+	  unless (= i (slot-definition-location slotd))
+	    do (error "slotd location does not match slotv index ~S ~S" (slot-definition-location slotd) i)
+	  do (let ((maybe-variable (ccl::%svref slotv i)))
+	       (unless (eq maybe-variable (ccl::%slot-unbound-marker))
+		 (when (variable-p maybe-variable)
+		   ;; preserve values of :set settable slots which are still settable-slots.
+		   (unless (and (typep slotd 'settable-slot-definition-mixin)
+				(typep maybe-variable 'settable-variable)
+				(eq :set (variable-status maybe-variable)))
+		     (unwind-protect
+			  (unwind-protect (unbind-this-variable maybe-variable)
+			    (unbind-dependent-variables maybe-variable))
+		       (setf (ccl::%svref slotv i) (ccl::%slot-unbound-marker)))))))))
   (values))
 
 
