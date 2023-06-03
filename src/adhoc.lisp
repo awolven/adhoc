@@ -483,7 +483,8 @@
 
 (defun finalize-inheritance-lite (adhoc-class)
   #+sbcl(sb-pcl::update-class adhoc-class t)
-  #+ccl(ccl::update-class adhoc-class t)
+  #+ccl(let ((ccl::*update-slots-preserve-existing-wrapper* t))
+	 (ccl::update-class adhoc-class t))
   (adhoc-class-finalize-inheritance-after adhoc-class))
 
 (defun adhoc-class-finalize-inheritance-after (class)
