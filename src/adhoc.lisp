@@ -250,6 +250,20 @@
 							  standard-effective-slot-definition)
   ())
 
+(defclass parametric-variable-slot-definition-mixin () ())
+
+(defclass direct-parametric-slot-definition (parametric-variable-slot-definition-mixin
+					     direct-settable-slot-definition-mixin
+					     direct-attribute-function-mixin
+					     standard-direct-slot-definition)
+  ())
+
+(defclass effective-parametric-slot-definition (parametric-variable-slot-definition-mixin
+						effective-settable-slot-definition-mixin
+						effective-attribute-function-mixin
+						standard-effective-slot-definition)
+  ())
+
 ;; serialization
 (defmethod slot-class-keyword ((slotd basic-attribute-definition-mixin))
   :attributes)
@@ -522,6 +536,7 @@
 (defmethod direct-slot-definition-class ((class adhoc-class) &rest initargs)
   (case (getf initargs :slot-class)
     (:ordinary-input (load-time-value (find-class 'direct-ordinary-input-definition)))
+    (:parameter (load-time-value (find-class 'direct-parametric-slot-definition)))
     (:defaulting-ordinary-input (load-time-value (find-class 'direct-defaulting-ordinary-input-definition)))
     (:optional-input (load-time-value (find-class 'direct-optional-input-definition)))
     (:defaulting-optional-input (load-time-value (find-class 'direct-defaulting-optional-input-definition)))
@@ -555,6 +570,7 @@
 			 (when dslotd (return dslotd))))))
     (typecase dslotd
       (direct-ordinary-input-definition (load-time-value (find-class 'effective-ordinary-input-definition)))
+      (direct-parametric-slot-definition (load-time-value (find-class 'effective-parametric-slot-definition)))
       (direct-defaulting-ordinary-input-definition (load-time-value (find-class 'effective-defaulting-ordinary-input-definition)))
       (direct-optional-input-definition (load-time-value (find-class 'effective-optional-input-definition)))
       (direct-defaulting-optional-input-definition (load-time-value (find-class 'effective-defaulting-optional-input-definition)))
@@ -686,6 +702,9 @@
 (defclass settable-variable (variable)
   ((status :accessor variable-status :initform nil)))
 
+(defclass parameter (settable-variable)
+  ())
+
 ;; to have an dependency maintenance location for the class of the subpart
 (defclass component-variable (variable)
   ((class)
@@ -782,6 +801,9 @@
 
 (defmethod variable-type ((slotd effective-settable-slot-definition-mixin))
   (load-time-value (find-class 'settable-variable)))
+
+(defmethod variable-type ((slotd effective-parametric-slot-definition))
+  (load-time-value (find-class 'parameter)))
 
 (defmethod variable-type ((slotd component-definition-mixin))
   (load-time-value (find-class 'component-variable)))
@@ -1061,12 +1083,18 @@
 		          (if component-definition
 		              (let* ((provided-input-function-plist (apply #'provided-inputs component-definition
 								                                   (slot-value instance 'indices))))
-			            (flet ((normal-lookup ()
-				                 (let ((input-function (getf provided-input-function-plist initarg)))
-				                   (if input-function
-				                       (with-dependent-notification (variable)
-					                     (funcall input-function (superior instance) instance))
-				                       (unbound)))))
+				(labels ((has-descending? (instance slot-name)
+					   (if (member slot-name (slot-value (class-of instance) 'effective-descending-attributes) :test #'eq)
+					       (slot-value instance slot-name)
+					       (if (superior instance)
+						   (has-descending? (superior instance) slot-name)
+						   (unbound))))
+					 (normal-lookup ()
+					   (let ((input-function (getf provided-input-function-plist initarg)))
+					     (if input-function
+						 (with-dependent-notification (variable)
+						   (funcall input-function (superior instance) instance))
+						 (has-descending? (superior instance) (slot-definition-name slotd))))))
 			              (let ((plist-function (getf provided-input-function-plist :@)))
 			                (if plist-function
 				                (let ((plist (with-dependent-notification (variable)
@@ -1326,7 +1354,7 @@
 	     (let ((input-function (getf provided-inputs slot-name)))
 	       (if input-function ;; pseudo inputs
 		   (funcall input-function (superior instance) instance)
-		   (has-descending? instance slot-name)))))
+		   (has-descending? (superior instance) slot-name)))))
 
     (let ((component-definition (component-definition instance)))
       (if component-definition
@@ -1774,37 +1802,23 @@
 
 
 
-(defun parse-defobject-body (class-name body)
-  (let ((*slots-table* (make-hash-table)))
-    (let* ((metaclass nil)
-	   (all-slots
-	     (append
-	      (loop for (keyword section) on body by #'cddr
-		    append (ecase keyword
-			     (:metaclass (if (and (symbolp section) (not (keywordp section)))
-					     (progn (setq metaclass section)
-						    nil)
-					     (error "invalid metaclass: ~S" section)))
-			     (:slots (parse-slots-section class-name section))
-			     (:inputs (parse-inputs-section class-name section))
-			     (:attributes (parse-attributes-section class-name section))
-			     (:components (parse-components-section class-name section))
-			     (:hidden-components (parse-components-section class-name section :hidden? t)))))))
-      (values all-slots metaclass))))
-
 ;; forward declare object for defobject macro
 (defclass object ()
   ()
   (:metaclass adhoc-class))
 
 
-(defun defobject-expansion (name supers slots metaclass)
+(defun defobject-expansion (name supers slots metaclass direct-default-initargs)
   (progn
     ;; forward declare type before compiling attribute bodies.
     (ensure-class name :metaclass (or metaclass 'adhoc-class))
     `(let ((old (find-class ',name nil)))
        (prog1 (ensure-class ',name
 			    :metaclass ',metaclass
+			    :direct-default-initargs (list ,@(loop for (initarg expression) on direct-default-initargs by #'cddr
+								   collect `(list ',initarg ',expression
+										  (lambda ()
+										    ,expression))))
 			    :direct-superclasses '(,@supers object)
 			    :direct-slots (list ,@slots)
 			    :direct-descending-attributes ',*descending-attributes*)
@@ -1874,12 +1888,6 @@
     ((instance object) added-slots discarded-slots property-list &rest initargs)
   (declare (ignore added-slots discarded-slots initargs))
 
-  ;; todo: need to set the slots which are not generative
-  ;; with the old value of the slot as if shared-initialize were doing it
-  ;; but we do not actually want shared-initialize to run
-  ;; or possibly an opaque shared-initialize could be implemented
-  ;; for adhoc 'object' and then this could be a :before method
-
   ;; first, unbind dependents for any slot we're losing:
   (loop for value in property-list by #'cddr
 	when (variable-p value)
@@ -1936,8 +1944,8 @@
 
 (defmacro defobject (name supers &body body)
   (let ((*descending-attributes* ()))
-    (multiple-value-bind (slots metaclass) (parse-defobject-body name body)
-      (defobject-expansion name supers slots (or metaclass 'adhoc-class)))))
+    (multiple-value-bind (slots metaclass direct-default-initargs) (parse-defobject-body name body)
+      (defobject-expansion name supers slots (or metaclass 'adhoc-class) direct-default-initargs))))
 
 (ensure-class 'null-object
 	      :metaclass 'adhoc-class
@@ -2111,7 +2119,6 @@
 	       (setq sub (list :head))
 	       (push (slot-class-keyword next) result))
 	     (push (nreverse (cdr sub)) result))
-	 ;;(break "~s" result)
        finally (return-from emit-defobject-body
 		 (append (nreverse result) add)))))
 
@@ -2137,5 +2144,117 @@
 			     :add
 			     (:components
 			      ((,slot-name :type ,type-expression
-				,@provided-inputs))))))))
+					   ,@provided-inputs))))))))
 
+(defun compute-relative-path (source destination)
+  (compute-relative-path-1 (send source root-path)
+			   (send destination root-path)))
+
+(defun compute-relative-path-1 (src dest)
+  (if (and (null src) (null dest))
+      nil
+      (if (eq (car src) (car dest))
+	  (compute-relative-path-1 (cdr src) (cdr dest))
+	  (append (make-list (length src) :initial-element 'superior) dest))))
+
+;; parameters
+
+
+
+
+
+(defmethod slot-value-using-class ((class adhoc-class) instance
+				   (slotd effective-parametric-slot-definition))
+  (let ((variable (get-variable instance slotd)))
+    (capture-direct-dependency variable)
+    (if (slot-boundp variable 'value)
+	(slot-value variable 'value)
+	(setf (slot-value variable 'value)
+	      (flet ((get-toplevel ()
+		       (if (attribute-function slotd)
+			   (coerce (funcall (attribute-function slotd) instance) 'double-float)
+			   0.0d0)))
+		(let ((component-definition (component-definition instance))
+		      (initarg (first (slot-definition-initargs slotd))))
+		  (if component-definition
+		      (let* ((provided-input-function-plist (apply #'provided-inputs component-definition
+								   (slot-value instance 'indices))))
+			(flet ((normal-lookup ()
+				 (let ((input-function (getf provided-input-function-plist initarg)))
+				   (if input-function
+				       (coerce (funcall input-function (superior instance) instance) 'double-float)
+				       (get-toplevel)))))
+			  (let ((plist-function (getf provided-input-function-plist :@)))
+			    (if plist-function
+				(let ((plist (funcall plist-function (superior instance) instance)))
+				  (let ((result (getf plist initarg +slot-unbound+)))
+				    (if (eq result +slot-unbound+)
+					(normal-lookup)
+					(coerce result 'double-float))))
+				(normal-lookup)))))
+		      (get-toplevel))))))))
+
+(defun parse-parameters-section (class-name section)
+  (loop for parameter-definition in section
+	do (let ((slot (if (consp parameter-definition) (first parameter-definition) parameter-definition)))
+	     (if (gethash slot *slots-table*)
+		 (duplicate-slot-error class-name slot)
+		 (setf (gethash slot *slots-table*) t)))
+	collect (cond ((and (consp parameter-definition)
+			    (symbolp (first parameter-definition))
+			    (not (keywordp (first parameter-definition))))
+		       (let* ((list (copy-list (rest parameter-definition)))
+			      (descending nil)
+			      (body nil))
+			 (tagbody
+			  start
+			    (cond ((eq (first list) :descending) (setq descending t) (pop list) (go start))
+				  ((and list (not (eq (first list) :descending)))
+				   (setq body list)
+				   (go exit))
+				  ((null list) (go exit)))
+			  exit)
+			 (when descending (push (first parameter-definition) *descending-attributes*))
+			 (list* 'list :name
+				`',(first parameter-definition)
+				:initargs `'(,(first parameter-definition))
+				:slot-class :parameter
+				(when body
+				  (list :function
+					`(with-cnm-support (:parameter (,(first parameter-definition) ,class-name))
+					   (sb-int:named-lambda (:parameter (,(first parameter-definition) ,class-name))
+					       (self)
+					     (declare (ignorable self))
+					     (declare (type ,class-name self))
+					     ,@body))
+					:body `',body)))))
+		      ((and (symbolp parameter-definition)
+			    (not (keywordp parameter-definition)))
+		       (list 'list :name `',parameter-definition
+				   :initargs `'(,parameter-definition)
+				   :slot-class :parameter))
+			 
+		      (t (error "Invalid parameter specification: ~S" parameter-definition)))))
+
+(defun parse-defobject-body (class-name body)
+  (let ((*slots-table* (make-hash-table)))
+    (let* ((metaclass nil)
+	   (direct-default-initargs nil)
+	   (all-slots
+	     (append
+	      (loop for (keyword section) on body by #'cddr
+		    append (ecase keyword
+			     (:default-initargs (progn (setf direct-default-initargs
+							     (append direct-default-initargs section))
+						       nil))
+			     (:metaclass (if (and (symbolp section) (not (keywordp section)))
+					     (progn (setq metaclass section)
+						    nil)
+					     (error "invalid metaclass: ~S" section)))
+			     (:slots (parse-slots-section class-name section))
+			     (:inputs (parse-inputs-section class-name section))
+			     (:attributes (parse-attributes-section class-name section))
+			     (:components (parse-components-section class-name section))
+			     (:hidden-components (parse-components-section class-name section :hidden? t))
+			     (:parameters (parse-parameters-section class-name section)))))))
+      (values all-slots metaclass direct-default-initargs))))
