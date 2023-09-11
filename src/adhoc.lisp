@@ -473,6 +473,22 @@
 	   (declare (ignorable (function call-next-method)))
 	   (funcall ,attribute-method-function-lambda ,self-arg))))))
 
+(defmacro with-setter-cnm-support (attribute-name attribute-method-function-lambda)
+  (let ((next-method-arg (gensym "NEXT-METHOD"))
+	(self-arg (gensym "SELF-"))
+	(value-arg (gensym "VALUE-")))
+    `(named-lambda ,attribute-name (,next-method-arg ,self-arg ,value-arg)
+       (declare (ignorable ,next-method-arg))
+       (flet ((next-method-p ()
+		(not (null ,next-method-arg))))
+	 (declare (ignorable (function next-method-p)))
+	 (flet ((call-next-method ()
+		  (if (next-method-p)
+		      (funcall ,next-method-arg ,self-arg)
+		      (error "No next method for the attribute ~S." ',attribute-name))))
+	   (declare (ignorable (function call-next-method)))
+	   (funcall ,attribute-method-function-lambda ,self-arg ,value-arg))))))
+
 (defun compute-emfun (dslotds)
   (when dslotds
     (let ((attribute-method-function (attribute-function (car dslotds))))
@@ -1727,7 +1743,7 @@
   `(setf ,location (nconc ,location (list ,value))))
 
 ;; from closette
-(defun canonicalize-direct-slot (spec)
+(defun canonicalize-direct-slot (class-name spec)
   (let ((s (if (symbolp spec) spec (car spec))))
     (if (gethash s *slots-table*)
 	(duplicate-slot-error 'unknown s)
@@ -1757,6 +1773,23 @@
             (:accessor
              (push-on-end (cadr olist) readers)
              (push-on-end `(setf ,(cadr olist)) writers))
+	    (:getter
+	     (push-on-end :getter other-options)
+	     (push-on-end `(with-cnm-support (:getter ,(car spec) (,class-name))
+			     (named-lambda (:getter ,(car spec) (,class-name))
+				 (self)
+			       (declare (type ,class-name self))
+			       ,@(cadr olist)))
+			  other-options))
+	    (:setter
+	     (push-on-end :setter other-options)
+	     (push-on-end `(with-setter-cnm-support (:setter ,(car spec) (,class-name))
+			     (named-lambda (:setter ,(car spec) (,class-name))
+				 (self value)
+			       (declare (type ,class-name self))
+			       (declare (ignorable value))
+			       ,@(cadr olist)))
+			  other-options))
             (otherwise 
              (push-on-end `',(car olist) other-options)
              (push-on-end `',(cadr olist) other-options))))
@@ -1772,8 +1805,9 @@
 
 
 (defun parse-slots-section (class-name section)
-  (declare (ignore class-name))
-  (mapcar #'canonicalize-direct-slot section))
+  (mapcar #'(lambda (sec)
+	      (canonicalize-direct-slot class-name sec))
+	  section))
 
 (defmethod defining-expression ((dslotd standard-direct-slot-definition))
   (let* ((class (slot-value dslotd +slotd-class-slot-name+))
