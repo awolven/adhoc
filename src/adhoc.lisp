@@ -2256,7 +2256,8 @@
 				(when body
 				  (list :function
 					`(with-cnm-support (:parameter (,(first parameter-definition) ,class-name))
-					   (sb-int:named-lambda (:parameter (,(first parameter-definition) ,class-name))
+					   
+					   (#+SBCL sb-int:named-lambda #+ccl ccl::named-lambda (:parameter (,(first parameter-definition) ,class-name))
 					       (self)
 					     (declare (ignorable self))
 					     (declare (type ,class-name self))
