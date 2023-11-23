@@ -1756,6 +1756,8 @@
             (initargs ())
             (readers ())
             (writers ())
+	    (getter ())
+	    (setter ())
             (other-options ()))
         (do ((olist (cdr spec) (cddr olist)))
             ((null olist))
@@ -1770,6 +1772,14 @@
              (push-on-end (cadr olist) readers))
             (:writer 
              (push-on-end (cadr olist) writers))
+	    (:getter
+	     (setq getter `(sb-int::named-lambda (:getter ,name (,class-name))
+			       (self)
+			     ,@(cadr olist))))
+	    (:setter
+	     (setq setter `(sb-int::named-lambda (:setter ,name (,class-name))
+			       (self value)
+			     ,@(cadr olist))))
             (:accessor
              (push-on-end (cadr olist) readers)
              (push-on-end `(setf ,(cadr olist)) writers))
@@ -1801,13 +1811,14 @@
           ,@(when initargs `(:initargs ',initargs))
           ,@(when readers `(:readers ',readers))
           ,@(when writers `(:writers ',writers))
+	  ,@(when getter `(:getter ,getter))
+	  ,@(when setter `(:setter ,setter))
           ,@other-options))))
 
 
 (defun parse-slots-section (class-name section)
-  (mapcar #'(lambda (sec)
-	      (canonicalize-direct-slot class-name sec))
-	  section))
+  (mapcar #'(lambda (slot)
+	      (canonicalize-direct-slot class-name slot)) section))
 
 (defmethod defining-expression ((dslotd standard-direct-slot-definition))
   (let* ((class (slot-value dslotd +slotd-class-slot-name+))
