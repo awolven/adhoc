@@ -484,7 +484,7 @@
 	 (declare (ignorable (function next-method-p)))
 	 (flet ((call-next-method ()
 		  (if (next-method-p)
-		      (funcall ,next-method-arg ,self-arg)
+		      (funcall ,next-method-arg ,self-arg ,value-arg)
 		      (error "No next method for the attribute ~S." ',attribute-name))))
 	   (declare (ignorable (function call-next-method)))
 	   (funcall ,attribute-method-function-lambda ,self-arg ,value-arg))))))
@@ -1773,36 +1773,41 @@
             (:writer 
              (push-on-end (cadr olist) writers))
 	    (:getter
-	     (setq getter `(sb-int::named-lambda (:getter ,name (,class-name))
-			       (self)
-			     ,@(cadr olist))))
+	     (setq getter `(with-cnm-support (:getter ,name (,class-name))
+			     (#+sbcl sb-int::named-lambda #+ccl ccl::named-lambda (:getter ,name (,class-name))
+				     (self)
+				     (declare (type ,class-name self))
+				     ,@(cadr olist)))))
 	    (:setter
-	     (setq setter `(sb-int::named-lambda (:setter ,name (,class-name))
-			       (self value)
-			     ,@(cadr olist))))
+	     (setq setter `(with-setter-cnm-support (:setter ,name (,class-name))
+			     (#+sbcl sb-int::named-lambda #+ccl ccl::named-lambda (:setter ,name (,class-name))
+				     (self value)
+				     (declare (type ,class-name self))
+				     (declare (ignorable value))
+				     ,@(cadr olist)))))
             (:accessor
              (push-on-end (cadr olist) readers)
              (push-on-end `(setf ,(cadr olist)) writers))
-	    (:getter
-	     (push-on-end :getter other-options)
-	     (push-on-end `(with-cnm-support (:getter ,(car spec) (,class-name))
-			     (named-lambda (:getter ,(car spec) (,class-name))
-				 (self)
-			       (declare (type ,class-name self))
-			       ,@(cadr olist)))
-			  other-options))
-	    (:setter
-	     (push-on-end :setter other-options)
-	     (push-on-end `(with-setter-cnm-support (:setter ,(car spec) (,class-name))
-			     (named-lambda (:setter ,(car spec) (,class-name))
-				 (self value)
-			       (declare (type ,class-name self))
-			       (declare (ignorable value))
-			       ,@(cadr olist)))
-			  other-options))
             (otherwise 
              (push-on-end `',(car olist) other-options)
              (push-on-end `',(cadr olist) other-options))))
+	
+	(when (and (eq (getf (cdr spec) :slot-class) :virtual)
+		   (null getter))
+	  (setq getter `(with-cnm-support (:getter ,name (,class-name))
+			     (#+sbcl sb-int::named-lambda #+ccl ccl::named-lambda (:getter ,name (,class-name))
+				     (self)
+				     (declare (type ,class-name self))
+				     (call-next-method)))))
+	
+	(when (and (eq (getf (cdr spec) :slot-class) :virtual)
+		   (null setter))
+	  (setq setter `(with-setter-cnm-support (:setter ,name (,class-name))
+			     (#+sbcl sb-int::named-lambda #+ccl ccl::named-lambda (:setter ,name (,class-name))
+				     (self value)
+				     (declare (type ,class-name self))
+				     (declare (ignorable value))
+				     (call-next-method)))))
         `(list
           :name ',name
           ,@(when initfunction
