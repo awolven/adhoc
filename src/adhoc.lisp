@@ -6,7 +6,8 @@
 
 (defvar self nil)
 
-(define-symbol-macro +slot-unbound+ #+sbcl sb-pcl::+slot-unbound+ #+ccl (ccl::%slot-unbound-marker))
+(define-symbol-macro +slot-unbound+ #+sbcl sb-pcl::+slot-unbound+ #+ccl (ccl::%slot-unbound-marker)
+				    #+allegro `excl::..slot-unbound..)
 
 #+CCL
 (defmacro standard-instance-access-compat (instance location)
@@ -16,6 +17,10 @@
 #+sbcl
 (defmacro standard-instance-access-compat (instance location)
   `(standard-instance-access ,instance ,location))
+
+#+allegro
+(defmacro standard-instance-access-compat (instance location)
+  `(mop:standard-instance-access ,instance ,location))
 
 #+ccl
 (defmacro named-lambda (name (&rest arglist) &body body)
@@ -27,7 +32,12 @@
   `(sb-int::named-lambda ,name (,@arglist)
      ,@body))
 
-(defparameter +slotd-class-slot-name+ #+ccl 'ccl::CLASS #+sbcl 'sb-pcl::%class)
+#+allegro
+(defmacro named-lambda (name (&rest arglist) &body body)
+  `(excl::named-function ,name (lambda (,@arglist)
+				 ,@body)))
+
+(defparameter +slotd-class-slot-name+ #+ccl 'ccl::CLASS #+sbcl 'sb-pcl::%class #+allegro 'excl::class)
 
 (defmacro send (object &rest messages)
   (if (null messages)
@@ -314,6 +324,9 @@
 
 (defclass uncached-attribute-mixin () ())
 
+(defmethod slot-definition-allocation ((slotd uncached-attribute-mixin))
+  :none)
+
 (defclass direct-uncached-attribute-definition (uncached-attribute-mixin
 						direct-attribute-function-mixin
 						standard-direct-slot-definition)
@@ -515,12 +528,15 @@
   #+sbcl(sb-pcl::update-class adhoc-class t)
   #+ccl(let ((ccl::*update-slots-preserve-existing-wrapper* t))
 	 (ccl::update-class adhoc-class t))
+  ;;#+allegro(excl::update-class-and-subclasses adhoc-class t)
   (adhoc-class-finalize-inheritance-after adhoc-class))
 
 (defun adhoc-class-finalize-inheritance-after (class)
   (let* ((adhoc-classes (remove-if-not #'(lambda (class)
 					   (typep class 'adhoc-class))
-				       (class-precedence-list class)))
+				       (#-allegro class-precedence-list
+					#+allegro compute-class-precedence-list
+					class)))
 	 (all-descending-attributes (apply #'append (mapcar #'direct-descending-attributes adhoc-classes))))
 
     (setf (effective-descending-attributes class) (remove-duplicates all-descending-attributes))
@@ -580,7 +596,7 @@
 
 (defmethod effective-slot-definition-class ((class adhoc-class) &rest initargs)
   (let* ((name (getf initargs :name))
-	 (dslotd (loop for c in (class-precedence-list class)
+	 (dslotd (loop for c in (compute-class-precedence-list class) ;; was (class-precedence-list class)
 		    do (let ((dslotd (find name (class-direct-slots c)
 					   :key #'slot-definition-name :test #'eq)))
 			 (when dslotd (return dslotd))))))
@@ -601,7 +617,7 @@
 
 (defmethod effective-slot-definition-class ((class funcallable-adhoc-class) &rest initargs)
   (let* ((name (getf initargs :name))
-	 (dslotd (loop for c in (class-precedence-list class)
+	 (dslotd (loop for c in (compute-class-precedence-list class)
 		    do (let ((dslotd (find name (class-direct-slots c)
 					   :key #'slot-definition-name :test #'eq)))
 			 (when dslotd (return dslotd))))))
@@ -720,6 +736,13 @@
 
 (defclass parameter (settable-variable)
   ())
+
+(defmethod print-object ((object parameter) stream)
+  (print-unreadable-object (object stream :type t)
+    (if (slot-boundp object 'value)
+	(princ (variable-value object) stream)
+	(princ :unbound stream))
+    object))
 
 ;; to have an dependency maintenance location for the class of the subpart
 (defclass component-variable (variable)
@@ -1257,7 +1280,8 @@
 (defmethod aggregate-lookup ((aggregate array-aggregate) &rest indices)
   (let* ((array (slot-value aggregate 'value))
 	     (element (handler-bind ((#+SBCL sb-int:invalid-array-index-error
-				                  #+CCL error
+				      #+CCL error
+				      #+ALLEGRO error
 				                  #'(lambda (e)
 				                      (declare (ignore e))
 				                      (error "Aggregate indices ~S for ~S on ~S not found."
@@ -1599,7 +1623,6 @@
 			    (uncached (list 'list
 					    :name `',(first attribute-definition)
 					    :slot-class :uncached-attribute
-					    :allocation :none
 					    :function `(with-cnm-support (:uncached-attribute (,(first attribute-definition) ,class-name))
 							 (named-lambda (:uncached-attribute (,(first attribute-definition) ,class-name))
 							     (self)
@@ -1774,13 +1797,19 @@
              (push-on-end (cadr olist) writers))
 	    (:getter
 	     (setq getter `(with-cnm-support (:getter ,name (,class-name))
-			     (#+sbcl sb-int::named-lambda #+ccl ccl::named-lambda (:getter ,name (,class-name))
+			     (#+sbcl sb-int::named-lambda
+			      #+ccl ccl::named-lambda
+			      #+allegro named-lambda
+			      (:getter ,name (,class-name))
 				     (self)
 				     (declare (type ,class-name self))
 				     ,@(cadr olist)))))
 	    (:setter
 	     (setq setter `(with-setter-cnm-support (:setter ,name (,class-name))
-			     (#+sbcl sb-int::named-lambda #+ccl ccl::named-lambda (:setter ,name (,class-name))
+			     (#+sbcl sb-int::named-lambda
+			      #+ccl ccl::named-lambda
+			      #+allegro named-lambda
+			      (:setter ,name (,class-name))
 				     (self value)
 				     (declare (type ,class-name self))
 				     (declare (ignorable value))
@@ -1795,7 +1824,10 @@
 	(when (and (eq (getf (cdr spec) :slot-class) :virtual)
 		   (null getter))
 	  (setq getter `(with-cnm-support (:getter ,name (,class-name))
-			     (#+sbcl sb-int::named-lambda #+ccl ccl::named-lambda (:getter ,name (,class-name))
+			  (#+sbcl sb-int::named-lambda
+			   #+ccl ccl::named-lambda
+			   #+allegro named-lambda
+			   (:getter ,name (,class-name))
 				     (self)
 				     (declare (type ,class-name self))
 				     (call-next-method)))))
@@ -1803,7 +1835,10 @@
 	(when (and (eq (getf (cdr spec) :slot-class) :virtual)
 		   (null setter))
 	  (setq setter `(with-setter-cnm-support (:setter ,name (,class-name))
-			     (#+sbcl sb-int::named-lambda #+ccl ccl::named-lambda (:setter ,name (,class-name))
+			  (#+sbcl sb-int::named-lambda
+			   #+ccl ccl::named-lambda
+			   #+allegro named-lambda
+			   (:setter ,name (,class-name))
 				     (self value)
 				     (declare (type ,class-name self))
 				     (declare (ignorable value))
@@ -1861,14 +1896,21 @@
 (defun defobject-expansion (name supers slots metaclass direct-default-initargs)
   (progn
     ;; forward declare type before compiling attribute bodies.
-    (ensure-class name :metaclass (or metaclass 'adhoc-class))
+    (unless (find-class name nil)
+      (ensure-class name :metaclass (or metaclass 'adhoc-class)))
     `(let ((old (find-class ',name nil)))
        (prog1 (ensure-class ',name
 			    :metaclass ',metaclass
 			    :direct-default-initargs (list ,@(loop for (initarg expression) on direct-default-initargs by #'cddr
-								   collect `(list ',initarg ',expression
-										  (lambda ()
-										    ,expression))))
+								   collect #-allegro
+								   `(list ',initarg ',expression
+									  (lambda ()
+									    ,expression))
+								   #+allegro
+								   `(list ',initarg
+									  (lambda ()
+									    ,expression)
+									  ',expression)))
 			    :direct-superclasses '(,@supers object)
 			    :direct-slots (list ,@slots)
 			    :direct-descending-attributes ',*descending-attributes*)
@@ -1948,6 +1990,28 @@
   ;; for all variables in the slot vector, except set settable variables which are still going to be in setttable slots
   ;; blow away generative data
   (let ((slotv (sb-pcl::std-instance-slots instance))
+	(slotds (remove-if-not #'(lambda (slotd)
+				   (eq :instance (slot-definition-allocation slotd)))
+			       (class-slots (class-of instance)))))
+			       
+    (loop for maybe-variable across slotv
+	  for i from 0
+	  for slotd in slotds
+	  unless (= i (slot-definition-location slotd))
+	    do (error "slotd location does not match slotv index.")
+	  do (unless (eq maybe-variable +slot-unbound+)
+	       (when (variable-p maybe-variable)
+		 ;; preserve values of :set settable slots which are still settable-slots.
+		 (unless (and (typep slotd 'settable-slot-definition-mixin)
+			      (typep maybe-variable 'settable-variable)
+			      (eq :set (variable-status maybe-variable)))
+		   (unwind-protect
+			(unwind-protect (unbind-this-variable maybe-variable)
+			  (unbind-dependent-variables maybe-variable))
+		     (setf (svref slotv i) +slot-unbound+)))))))
+
+  #+ALLEGRO
+  (let ((slotv (excl:std-instance-slots instance))
 	(slotds (remove-if-not #'(lambda (slotd)
 				   (eq :instance (slot-definition-allocation slotd)))
 			       (class-slots (class-of instance)))))
@@ -2273,7 +2337,10 @@
 				  (list :function
 					`(with-cnm-support (:parameter (,(first parameter-definition) ,class-name))
 					   
-					   (#+SBCL sb-int:named-lambda #+ccl ccl::named-lambda (:parameter (,(first parameter-definition) ,class-name))
+					   (#+SBCL sb-int:named-lambda
+					    #+ccl ccl::named-lambda
+					    #+allegro named-lambda
+					    (:parameter (,(first parameter-definition) ,class-name))
 					       (self)
 					     (declare (ignorable self))
 					     (declare (type ,class-name self))

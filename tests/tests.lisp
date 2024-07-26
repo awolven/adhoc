@@ -16,7 +16,7 @@
   ()
   #+sbcl (defobject a1 (a0))
   (defobject a0 () :inputs (a))
-  #+CCL (defobject a1 (a0))
+  #+(or CCL ALLEGRO)(defobject a1 (a0))
   (let ((a1 (make-instance 'a1 'a 1)))
     (5am:is (eq (send a1 a) 1))))
 
@@ -24,7 +24,7 @@
   ()
   #+sbcl (defobject a1 (a0))
   (defobject a0 () :inputs ((a 0)))
-  #+CCL (defobject a1 (a0))
+  #+(or CCL ALLEGRO)(defobject a1 (a0))
   (let ((a1 (make-instance 'a1)))
     (5am:is (eq (send a1 a) 0))))
 
@@ -290,7 +290,7 @@
 (5am:test descending-attribute-test-1
   ()
 
-  #+CCL (defobject baz ()
+  #+(or CCL ALLEGRO) (defobject baz ()
     :components
     ((b2 :type 'bar)))
   
@@ -506,6 +506,7 @@
   ()
   (5am:is (defaulting-4)))
 
+#-ALLEGRO
 (defun standard-class-superclass-test-1 ()
   (defclass foo-std-class ()
     ((b :initform 8)))
@@ -514,6 +515,7 @@
   (let ((instance (make-instance 'baz)))
     (eq 8 (send instance b))))
 
+#-ALLEGRO
 (5am:test standard-class-superclass-test-1
   ()
   (5am:is (standard-class-superclass-test-1)))
@@ -530,7 +532,8 @@
 (5am:test defobject-slot-test-1
   ()
   (5am:is (defobject-slot-test-1)))
-  
+
+#-ALLEGRO
 (defun changing-slot-structure-1 ()
   (defobject a ())
   (defobject b ()
