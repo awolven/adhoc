@@ -82,6 +82,47 @@
 (defmacro the (&rest messages)
   `(send self ,@messages))
 
+(defclass virtual-slot-definition-mixin ()
+  ())
+
+(defmethod slot-definition-allocation ((slotd virtual-slot-definition-mixin))
+  :none)
+
+(defmethod shared-initialize :after ((instance virtual-slot-definition-mixin) slot-names &rest initargs
+				     &key &allow-other-keys)
+  (declare (ignore slot-names initargs))
+  (values))
+
+(defclass direct-virtual-slot-definition-mixin (virtual-slot-definition-mixin)
+  ((getter :initarg :getter)
+   (setter :initarg :setter)))
+
+(defclass effective-virtual-slot-definition-mixin (virtual-slot-definition-mixin)
+  ((getter)
+   (setter)))
+
+(defclass direct-ordinary-virtual-slot-definition (direct-virtual-slot-definition-mixin
+						   standard-direct-slot-definition)
+  ())
+
+(defclass effective-ordinary-virtual-slot-definition (effective-virtual-slot-definition-mixin
+						      standard-effective-slot-definition)
+  ())
+
+(defun compute-getter-emfun (dslotds)
+  (when dslotds
+    (let ((next-emfun (compute-getter-emfun (cdr dslotds)))
+	  (this-emfun (slot-value (car dslotds) 'getter)))
+      #'(lambda (object)
+	  (funcall this-emfun next-emfun object)))))
+
+(defun compute-setter-emfun (dslotds)
+  (when dslotds
+    (let ((next-emfun (compute-setter-emfun (cdr dslotds)))
+	  (this-emfun (slot-value (car dslotds) 'setter)))
+      #'(lambda (object value)
+	  (funcall this-emfun next-emfun object value)))))
+
 (defclass basic-attribute-definition-mixin () ())
 
 (defclass direct-basic-attribute-definition-mixin
@@ -91,6 +132,9 @@
 (defclass effective-basic-attribute-definition-mixin
     (basic-attribute-definition-mixin)
   ((shadow :accessor %shadow)))
+
+(defclass eager-attribute-definition-mixin ()
+  ())
 
 (defclass settable-slot-definition-mixin ()
   ((noticers :accessor noticers :initform nil)))
@@ -123,6 +167,8 @@
 					 direct-basic-attribute-definition-mixin)
   ())
 
+
+
 (defclass effective-input-definition-mixin (input-definition-mixin
 					    effective-basic-attribute-definition-mixin)
   ((status :accessor input-status :initform nil)))
@@ -147,11 +193,24 @@
 (defmethod attribute-function ((dslotd direct-ordinary-input-definition-mixin))
   nil)
 
+(defclass direct-eager-ordinary-input-definition-mixin (eager-attribute-definition-mixin
+							direct-ordinary-input-definition-mixin)
+  ())
+
 (defclass effective-ordinary-input-definition-mixin (effective-input-definition-mixin) ())
+
+(defclass effective-eager-ordinary-input-definition-mixin (eager-attribute-definition-mixin
+							   effective-ordinary-input-definition-mixin)
+  ())
 
 (defclass direct-ordinary-input-definition (direct-settable-slot-definition-mixin
 					    direct-ordinary-input-definition-mixin
 					    standard-direct-slot-definition)
+  ())
+
+(defclass direct-eager-ordinary-input-definition (direct-settable-slot-definition-mixin
+						  direct-eager-ordinary-input-definition-mixin
+						  standard-direct-slot-definition)
   ())
 
 ;; this method is for adhoc-class serialization
@@ -518,6 +577,9 @@
    (slot-locations :initform (make-hash-table) :accessor slot-locations)
    (children-dependents :initform nil :accessor children-dependents)))
 
+(defmethod validate-superclass ((c1 adhoc-class) (c2 standard-class))
+  t)
+
 (defclass funcallable-adhoc-class (funcallable-standard-class)
   ())
 
@@ -562,11 +624,11 @@
 (defmethod finalize-inheritance :after ((class adhoc-class))
   (adhoc-class-finalize-inheritance-after class))
 
-(defmethod validate-superclass ((c1 adhoc-class) (c2 standard-class))
-  t)
+
 
 (defmethod direct-slot-definition-class ((class adhoc-class) &rest initargs)
   (case (getf initargs :slot-class)
+    (:virtual (load-time-value (find-class 'direct-ordinary-virtual-slot-definition)))
     (:ordinary-input (load-time-value (find-class 'direct-ordinary-input-definition)))
     (:parameter (load-time-value (find-class 'direct-parametric-slot-definition)))
     (:defaulting-ordinary-input (load-time-value (find-class 'direct-defaulting-ordinary-input-definition)))
@@ -601,6 +663,8 @@
 					   :key #'slot-definition-name :test #'eq)))
 			 (when dslotd (return dslotd))))))
     (typecase dslotd
+      (direct-ordinary-virtual-slot-definition
+       (load-time-value (find-class 'effective-ordinary-virtual-slot-definition)))
       (direct-ordinary-input-definition (load-time-value (find-class 'effective-ordinary-input-definition)))
       (direct-parametric-slot-definition (load-time-value (find-class 'effective-parametric-slot-definition)))
       (direct-defaulting-ordinary-input-definition (load-time-value (find-class 'effective-defaulting-ordinary-input-definition)))
@@ -625,6 +689,13 @@
       (direct-ordinary-attribute-definition
        (load-time-value (find-class 'effective-ordinary-attribute-definition)))
       (t (call-next-method)))))
+
+(defmethod upgrade-eslotd ((eslotd effective-virtual-slot-definition-mixin)
+			   (dslotd direct-virtual-slot-definition-mixin)
+			   &rest dslotds)
+  (setf (slot-value eslotd 'getter) (compute-getter-emfun dslotds))
+  (setf (slot-value eslotd 'setter) (compute-setter-emfun dslotds))
+  eslotd)
 
 (defmethod upgrade-eslotd (eslotd (dslotd standard-direct-slot-definition) &rest dslotds)
   (declare (ignore dslotds))
@@ -699,7 +770,16 @@
 (defmethod shared-initialize :after ((instance adhoc-mixin) slot-names &rest initargs)
   (declare (ignore initargs slot-names))
   (unless (superior instance)
-    (setf (slot-value instance 'root) instance))
+    (setf (slot-value instance 'root) instance)
+    #+NOTYET
+    (let* ((class (class-of instance))
+	   (eslotds (class-slots class)))
+      (loop for eslotd in eslotds
+	    when (typep eslotd 'eager-input-mixin)
+	      do (compute-eager-slot instance eslotd))
+      (loop for eslotd in eslotds
+	    when (typep eslotd 'eager-attribute-mixin)
+	      do (compute-eager-slot instance eslotd))))
   (values))
 
 (defmethod shared-initialize :around ((instance adhoc-mixin) slot-names &rest initargs)
@@ -944,6 +1024,18 @@
 	  (setf (funcallable-standard-instance-access instance location) variable))
 	maybe-variable)))
 
+(defmethod slot-value-using-class ((class adhoc-class) instance
+				   (slotd effective-ordinary-virtual-slot-definition))
+  (funcall (slot-value slotd 'getter) instance))
+
+(defmethod (setf slot-value-using-class) (value (class adhoc-class) instance
+					  (slotd effective-ordinary-virtual-slot-definition))
+  (funcall (slot-value slotd 'setter) instance value)
+  (values))
+
+(defmethod slot-boundp-using-class ((class adhoc-class) instance
+				    (slotd effective-ordinary-virtual-slot-definition))
+  t)
 
 (defmethod (setf slot-value-using-class) (value (class adhoc-class) instance
 					  (slotd effective-settable-slot-definition-mixin))
@@ -1502,12 +1594,14 @@
 			    (not (keywordp (first input-definition))))
 		       (let ((defaulting nil)
 			     (descending nil)
+			     (eager nil)
 			     (noticers ())
 			     (list (copy-list (rest input-definition)))
 			     (body nil))
 			 (tagbody
 			  start
-			    (cond ((eq (first list) :defaulting) (setq defaulting t) (pop list) (go start))
+			    (cond ((eq (first list) :eager) (setq eager t) (pop list) (go start))
+				  ((eq (first list) :defaulting) (setq defaulting t) (pop list) (go start))
 				  ((eq (first list) :descending) (setq descending t) (pop list) (go start))
 				  ((and (consp (first list))
 					(eq (first (first list)) :noticer))
@@ -1526,9 +1620,13 @@
 				:initargs `'(,(first input-definition))
 				(append
 				 (if (null body)
-				     (if defaulting
-					 (list :slot-class :defaulting-ordinary-input)
-					 (list :slot-class :ordinary-input))
+				     (if eager
+					 (if defaulting
+					     (list :slot-class :defaulting-eager-ordinary-input)
+					     (list :slot-class :eager-ordinary-input))
+					 (if defaulting
+					     (list :slot-class :defaulting-ordinary-input)
+					     (list :slot-class :ordinary-input)))
 				     (list* :body `',body
 					    :function `(with-cnm-support (:input (,(first input-definition) ,class-name))
 							 (named-lambda (:input (,(first input-definition) ,class-name))
@@ -1536,9 +1634,13 @@
 							   (declare (ignorable self))
 							   (declare (type ,class-name self))
 							   ,@body))
-					    (if defaulting
-						(list :slot-class :defaulting-optional-input)
-						(list :slot-class :optional-input))))
+					    (if eager
+						(if defaulting
+						    (list :slot-class :defaulting-eager-optional-input)
+						    (list :slot-class :eager-optional-input))
+						(if defaulting
+						    (list :slot-class :defaulting-optional-input)
+						    (list :slot-class :optional-input)))))
 				 (when noticers
 				   (list :noticers
 					 (list
