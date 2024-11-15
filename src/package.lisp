@@ -76,3 +76,4 @@
 	   ,@options)))
     `(cl:defpackage ,name ,@options)))
 	   
+(adhoc:defpackage :adhoc-scene-graph)

@@ -125,16 +125,19 @@
 
 (defclass basic-attribute-definition-mixin () ())
 
+(defclass eager-attribute-definition-mixin () ())
+
 (defclass direct-basic-attribute-definition-mixin
     (basic-attribute-definition-mixin)
   ())
+
+
 
 (defclass effective-basic-attribute-definition-mixin
     (basic-attribute-definition-mixin)
   ((shadow :accessor %shadow)))
 
-(defclass eager-attribute-definition-mixin ()
-  ())
+
 
 (defclass settable-slot-definition-mixin ()
   ((noticers :accessor noticers :initform nil)))
@@ -155,6 +158,8 @@
 
 (defclass input-definition-mixin ()
   ())
+
+(defclass visual-mixin () ())
 
 ;; this is for adhoc class serialization
 (defmethod slot-class-keyword ((slotd input-definition-mixin))
@@ -177,6 +182,9 @@
 (defclass attribute-function-mixin ()
   ((attribute-function :accessor attribute-function)))
 
+(defclass ordinary-input-definition-mixin (input-definition-mixin)
+  ())
+
 ;; attribute-body is for adhoc-class serialization
 (defclass direct-attribute-function-mixin (attribute-function-mixin
 					   direct-basic-attribute-definition-mixin)
@@ -188,30 +196,27 @@
 
 (defclass defaulting-attribute-mixin () ())
 
+(defclass defaulting-ordinary-input-definition-mixin (defaulting-attribute-mixin
+						      ordinary-input-definition-mixin)
+  ())
+
 (defclass direct-ordinary-input-definition-mixin (direct-input-definition-mixin) ())
 
 (defmethod attribute-function ((dslotd direct-ordinary-input-definition-mixin))
   nil)
 
-(defclass direct-eager-ordinary-input-definition-mixin (eager-attribute-definition-mixin
-							direct-ordinary-input-definition-mixin)
-  ())
-
 (defclass effective-ordinary-input-definition-mixin (effective-input-definition-mixin) ())
 
-(defclass effective-eager-ordinary-input-definition-mixin (eager-attribute-definition-mixin
-							   effective-ordinary-input-definition-mixin)
-  ())
 
 (defclass direct-ordinary-input-definition (direct-settable-slot-definition-mixin
 					    direct-ordinary-input-definition-mixin
 					    standard-direct-slot-definition)
   ())
 
-(defclass direct-eager-ordinary-input-definition (direct-settable-slot-definition-mixin
-						  direct-eager-ordinary-input-definition-mixin
-						  standard-direct-slot-definition)
+(defclass direct-visual-ordinary-input-definition (visual-mixin
+						   direct-ordinary-input-definition)
   ())
+
 
 ;; this method is for adhoc-class serialization
 (defmethod defining-expression ((slotd direct-ordinary-input-definition))
@@ -231,10 +236,19 @@
 					       standard-effective-slot-definition)
   ())
 
-(defclass direct-defaulting-ordinary-input-definition (defaulting-attribute-mixin
+(defclass effective-visual-ordinary-input-definition (visual-mixin
+						      effective-ordinary-input-definition)
+  ())
+
+(defclass direct-defaulting-ordinary-input-definition (defaulting-ordinary-input-definition-mixin
 						       direct-settable-slot-definition-mixin
 						       direct-ordinary-input-definition-mixin
 						       standard-direct-slot-definition)
+  ())
+
+(defclass direct-visual-defaulting-ordinary-input-definition
+    (visual-mixin
+     direct-defaulting-ordinary-input-definition)
   ())
 
 ;; this method is for adhoc-class serialization
@@ -252,19 +266,48 @@
 			     (noticers slotd)))))))
 
 (defclass effective-defaulting-ordinary-input-definition
-    (defaulting-attribute-mixin
+    (defaulting-ordinary-input-definition-mixin
      effective-settable-slot-definition-mixin
      effective-ordinary-input-definition-mixin
      standard-effective-slot-definition)
   ())
 
+(defclass effective-visual-defaulting-ordinary-input-definition
+    (visual-mixin
+     effective-defaulting-ordinary-input-definition)
+  ())
+
 (defclass optional-input-definition-mixin (attribute-function-mixin) ())
+
+(defclass defaulting-optional-input-definition-mixin (defaulting-attribute-mixin
+						      optional-input-definition-mixin)
+  ())
+
+(defclass eager-optional-input-definition-mixin (eager-attribute-definition-mixin
+						 optional-input-definition-mixin)
+  ())
+
 
 (defclass direct-optional-input-definition (direct-settable-slot-definition-mixin
 					    direct-input-definition-mixin
 					    direct-attribute-function-mixin
 					    optional-input-definition-mixin
 					    standard-direct-slot-definition)
+  ())
+
+(defclass direct-visual-optional-input-definition (visual-mixin
+						   direct-optional-input-definition)
+  ())
+
+(defclass direct-eager-optional-input-definition (direct-settable-slot-definition-mixin
+						  direct-input-definition-mixin
+						  direct-attribute-function-mixin
+						  eager-optional-input-definition-mixin
+						  standard-direct-slot-definition)
+  ())
+
+(defclass direct-visual-eager-optional-input-definition (visual-mixin
+							 direct-eager-optional-input-definition)
   ())
 
 ;; serialization
@@ -289,13 +332,32 @@
 					       standard-effective-slot-definition)
   ())
 
-(defclass direct-defaulting-optional-input-definition (defaulting-attribute-mixin
-						       optional-input-definition-mixin
+(defclass effective-visual-optional-input-definition (visual-mixin
+						      effective-optional-input-definition)
+  ())
+
+(defclass effective-eager-optional-input-definition (eager-optional-input-definition-mixin
+						     effective-settable-slot-definition-mixin
+						     effective-input-definition-mixin
+						     effective-attribute-function-mixin
+						     standard-effective-slot-definition)
+  ())
+
+(defclass effective-visual-eager-optional-input-definition (visual-mixin
+							    effective-eager-optional-input-definition)
+  ())
+
+(defclass direct-defaulting-optional-input-definition (defaulting-optional-input-definition-mixin
 						       direct-settable-slot-definition-mixin
 						       direct-input-definition-mixin
 						       direct-attribute-function-mixin
 						       standard-direct-slot-definition)
   ())
+
+(defclass direct-visual-defaulting-optional-input-definition (visual-mixin
+							      direct-defaulting-optional-input-definition)
+  ())
+
 
 ;; serialization
 (defmethod defining-expression ((slotd direct-defaulting-optional-input-definition))
@@ -313,10 +375,15 @@
 		body))))	   
 
 (defclass effective-defaulting-optional-input-definition (effective-settable-slot-definition-mixin
+							  defaulting-optional-input-definition-mixin
 							  effective-input-definition-mixin
-							  defaulting-attribute-mixin
 							  effective-attribute-function-mixin
 							  standard-effective-slot-definition)
+  ())
+
+(defclass effective-visual-defaulting-optional-input-definition
+    (visual-mixin
+     effective-defaulting-optional-input-definition)
   ())
 
 (defclass parametric-variable-slot-definition-mixin () ())
@@ -337,13 +404,47 @@
 (defmethod slot-class-keyword ((slotd basic-attribute-definition-mixin))
   :attributes)
 
-(defclass direct-ordinary-attribute-definition (direct-attribute-function-mixin
+(defclass direct-ordinary-attribute-definition-mixin (direct-attribute-function-mixin)
+  ())
+
+(defclass direct-global-matrix-attribute-definition (eager-attribute-definition-mixin
+						     direct-ordinary-attribute-definition-mixin
+						     standard-direct-slot-definition)
+  ())
+
+(defclass direct-eager-ordinary-attribute-definition-mixin (eager-attribute-definition-mixin
+							    direct-ordinary-attribute-definition-mixin)
+  ())
+
+(defclass direct-ordinary-attribute-definition (direct-ordinary-attribute-definition-mixin
 						standard-direct-slot-definition)
   ())
 
-(defclass effective-ordinary-attribute-definition (effective-non-settable-slot-definition-mixin
-						   effective-attribute-function-mixin
+(defclass direct-eager-ordinary-attribute-definition (eager-attribute-definition-mixin
+						      direct-ordinary-attribute-definition)
+  ())
+
+(defclass effective-ordinary-attribute-definition-mixin (effective-non-settable-slot-definition-mixin
+							 effective-attribute-function-mixin)
+  ())
+
+(defclass effective-eager-ordinary-attribute-definition-mixin
+    (eager-attribute-definition-mixin
+     effective-ordinary-attribute-definition-mixin)
+  ())
+
+(defclass effective-global-matrix-attribute-definition
+    (effective-eager-ordinary-attribute-definition-mixin
+     standard-effective-slot-definition)
+  ())
+
+(defclass effective-ordinary-attribute-definition (effective-ordinary-attribute-definition-mixin
 						   standard-effective-slot-definition)
+  ())
+
+(defclass effective-eager-ordinary-attribute-definition (effective-eager-ordinary-attribute-definition-mixin
+							 standard-effective-slot-definition)
+  
   ())
 
 ;; serialization
@@ -360,6 +461,11 @@
 						  direct-attribute-function-mixin
 						  standard-direct-slot-definition)
   ())
+
+(defclass direct-visual-modifiable-attribute-definition
+    (visual-mixin
+     direct-modifiable-attribute-definition)
+  ())  
 
 ;; serialization
 (defmethod defining-expression ((slotd direct-modifiable-attribute-definition))
@@ -379,6 +485,11 @@
 (defclass effective-modifiable-attribute-definition (effective-settable-slot-definition-mixin
 						     effective-attribute-function-mixin
 						     standard-effective-slot-definition)
+  ())
+
+(defclass effective-visual-modifiable-attribute-definition
+    (visual-mixin
+     effective-modifiable-attribute-definition)
   ())
 
 (defclass uncached-attribute-mixin () ())
@@ -450,8 +561,16 @@
 					     direct-basic-attribute-definition-mixin)
   ((type-expression :accessor component-type-expression)))
 
+(defclass direct-eager-component-definition-mixin (eager-attribute-definition-mixin
+						   direct-component-definition-mixin)
+  ())
+
 (defclass effective-component-definition-mixin (effective-non-settable-slot-definition-mixin
 						effective-basic-attribute-definition-mixin)
+  ())
+
+(defclass effective-eager-component-definition-mixin (eager-attribute-definition-mixin
+						      effective-component-definition-mixin)
   ())
 
 (defclass ordinary-component-definition-mixin (component-definition-mixin)
@@ -461,6 +580,12 @@
 						direct-component-definition-mixin
 						standard-direct-slot-definition)
   ())
+
+(defclass direct-eager-ordinary-component-definition (ordinary-component-definition-mixin
+						      direct-eager-component-definition-mixin
+						      standard-direct-slot-definition)
+  ())
+
 ;; serialization
 (defmethod defining-expression ((slotd direct-ordinary-component-definition))
   (let ((slot-definition-name (slot-definition-name slotd))
@@ -474,19 +599,38 @@
 						   standard-effective-slot-definition)
   ())
 
+(defclass effective-eager-ordinary-component-definition (ordinary-component-definition-mixin
+							 effective-eager-component-definition-mixin
+							 standard-effective-slot-definition)
+  ())
+
 (defclass direct-array-aggregate-component-definition-mixin (array-aggregate-component-definition-mixin
 							     direct-component-definition-mixin
 							     direct-non-settable-slot-definition-mixin)
   ((size-expression :accessor size-expression)))
+
+(defclass direct-eager-array-aggregate-component-definition-mixin (eager-attribute-definition-mixin
+								   direct-array-aggregate-component-definition-mixin)
+  ())
 
 (defclass direct-table-aggregate-component-definition-mixin (table-aggregate-component-definition-mixin
 							     direct-component-definition-mixin
 							     direct-non-settable-slot-definition-mixin)
   ((indices-expression :accessor indices-expression)))
 
+(defclass direct-eager-table-aggregate-component-definition-mixin
+    (eager-attribute-definition-mixin
+     direct-table-aggregate-component-definition-mixin)
+  ())  
+
 (defclass effective-array-aggregate-component-definition-mixin (array-aggregate-component-definition-mixin
 								effective-component-definition-mixin
 								effective-non-settable-slot-definition-mixin)
+  ())
+
+(defclass effective-eager-array-aggregate-component-definition-mixin
+    (eager-attribute-definition-mixin
+     effective-array-aggregate-component-definition-mixin)
   ())
 
 (defclass effective-table-aggregate-component-definition-mixin (table-aggregate-component-definition-mixin
@@ -494,8 +638,18 @@
 								effective-non-settable-slot-definition-mixin)
   ())
 
+(defclass effective-eager-table-aggregate-component-definition-mixin
+    (eager-attribute-definition-mixin
+     effective-table-aggregate-component-definition-mixin)
+  ())
+
 (defclass direct-array-aggregate-component-definition (direct-array-aggregate-component-definition-mixin
 						       standard-direct-slot-definition)
+  ())
+
+(defclass direct-eager-array-aggregate-component-definition
+    (direct-eager-array-aggregate-component-definition-mixin
+     standard-direct-slot-definition)
   ())
 
 (defmethod defining-expression ((slotd direct-array-aggregate-component-definition))
@@ -512,12 +666,27 @@
 						       standard-direct-slot-definition)
   ())
 
+(defclass direct-eager-table-aggregate-component-definition
+    (direct-eager-table-aggregate-component-definition-mixin
+     standard-direct-slot-definition)
+  ())
+
 (defclass effective-array-aggregate-component-definition (effective-array-aggregate-component-definition-mixin
 							  standard-effective-slot-definition)
   ())
 
+(defclass effective-eager-array-aggregate-component-definition
+    (effective-eager-array-aggregate-component-definition-mixin
+     standard-effective-slot-definition)
+  ())
+
 (defclass effective-table-aggregate-component-definition (effective-table-aggregate-component-definition-mixin
 							  standard-effective-slot-definition)
+  ())
+
+(defclass effective-eager-table-aggregate-component-definition
+    (effective-eager-table-aggregate-component-definition-mixin
+     standard-effective-slot-definition)
   ())
 
 (defclass direct-maintained-slot-definition (direct-settable-slot-definition-mixin
@@ -629,17 +798,33 @@
 (defmethod direct-slot-definition-class ((class adhoc-class) &rest initargs)
   (case (getf initargs :slot-class)
     (:virtual (load-time-value (find-class 'direct-ordinary-virtual-slot-definition)))
+    (:visual-ordinary-input (load-time-value (find-class 'direct-visual-ordinary-input-definition)))
     (:ordinary-input (load-time-value (find-class 'direct-ordinary-input-definition)))
     (:parameter (load-time-value (find-class 'direct-parametric-slot-definition)))
+    (:visual-defaulting-ordinary-input
+     (load-time-value (find-class 'direct-visual-defaulting-ordinary-input-definition)))
     (:defaulting-ordinary-input (load-time-value (find-class 'direct-defaulting-ordinary-input-definition)))
+    (:visual-optional-input (load-time-value (find-class 'direct-visual-optional-input-definition)))
     (:optional-input (load-time-value (find-class 'direct-optional-input-definition)))
+    (:visual-defaulting-optional-input
+     (load-time-value (find-class 'direct-visual-defaulting-optional-input-definition)))
     (:defaulting-optional-input (load-time-value (find-class 'direct-defaulting-optional-input-definition)))
+    (:visual-eager-optional-input
+     (load-time-value (find-class 'direct-visual-eager-optional-input-definition)))
+    (:eager-optional-input (load-time-value (find-class 'direct-eager-optional-input-definition)))
     (:ordinary-attribute (load-time-value (find-class 'direct-ordinary-attribute-definition)))
+    (:visual-modifiable-attribute
+     (load-time-value (find-class 'direct-visual-modifiable-attribute-definition)))
     (:modifiable-attribute (load-time-value (find-class 'direct-modifiable-attribute-definition)))
     (:uncached-attribute (load-time-value (find-class 'direct-uncached-attribute-definition)))
+    (:global-matrix-attribute (load-time-value (find-class 'direct-global-matrix-attribute-definition)))
+    (:eager-ordinary-attribute (load-time-value (find-class 'direct-eager-ordinary-attribute-definition)))
     (:ordinary-component (load-time-value (find-class 'direct-ordinary-component-definition)))
+    (:eager-ordinary-component (load-time-value (find-class 'direct-eager-ordinary-component-definition)))
     (:array-aggregate (load-time-value (find-class 'direct-array-aggregate-component-definition)))
+    (:eager-array-aggregate (load-time-value (find-class 'direct-eager-array-aggregate-component-definition)))
     (:table-aggregate (load-time-value (find-class 'direct-table-aggregate-component-definition)))
+    (:eager-table-aggregate (load-time-value (find-class 'direct-eager-table-aggregate-component-definition)))
     ;;(t (load-time-value (find-class 'direct-maintained-slot-definition)))
     (t (call-next-method))
     ))
@@ -665,17 +850,36 @@
     (typecase dslotd
       (direct-ordinary-virtual-slot-definition
        (load-time-value (find-class 'effective-ordinary-virtual-slot-definition)))
+      (direct-visual-ordinary-input-definition
+       (load-time-value (find-class 'effective-visual-ordinary-input-definition)))
       (direct-ordinary-input-definition (load-time-value (find-class 'effective-ordinary-input-definition)))
       (direct-parametric-slot-definition (load-time-value (find-class 'effective-parametric-slot-definition)))
+      (direct-visual-eager-optional-input-definition
+       (load-time-value (find-class 'effective-visual-eager-optional-input-definition)))
+      (direct-eager-optional-input-definition (load-time-value (find-class 'effective-eager-optional-input-definition)))
+      (direct-visual-defaulting-ordinary-input-definition
+       (load-time-value (find-class 'effective-visual-defaulting-ordinary-input-definition)))
       (direct-defaulting-ordinary-input-definition (load-time-value (find-class 'effective-defaulting-ordinary-input-definition)))
+      (direct-visual-optional-input-definition
+       (load-time-value (find-class 'effective-visual-optional-input-definition)))
       (direct-optional-input-definition (load-time-value (find-class 'effective-optional-input-definition)))
+      (direct-visual-defaulting-optional-input-definition
+       (load-time-value (find-class 'effective-visual-defaulting-optional-input-definition)))
       (direct-defaulting-optional-input-definition (load-time-value (find-class 'effective-defaulting-optional-input-definition)))
+      (direct-global-matrix-attribute-definition (load-time-value (find-class 'effective-global-matrix-attribute-definition)))
+      (direct-eager-ordinary-attribute-definition (load-time-value (find-class 'effective-eager-ordinary-attribute-definition)))
       (direct-ordinary-attribute-definition (load-time-value (find-class 'effective-ordinary-attribute-definition)))
+      (direct-visual-modifiable-attribute-definition
+       (load-time-value (find-class 'effective-visual-modifiable-attribute-definition)))
       (direct-modifiable-attribute-definition (load-time-value (find-class 'effective-modifiable-attribute-definition)))
       (direct-uncached-attribute-definition (load-time-value (find-class 'effective-uncached-attribute-definition)))
+      
       (direct-ordinary-component-definition (load-time-value (find-class 'effective-ordinary-component-definition)))
+      (direct-eager-ordinary-component-definition (load-time-value (find-class 'effective-eager-ordinary-component-definition)))
       (direct-array-aggregate-component-definition (load-time-value (find-class 'effective-array-aggregate-component-definition)))
+      (direct-eager-array-aggregate-component-definition (load-time-value (find-class 'effective-eager-array-aggregate-component-definition)))
       (direct-table-aggregate-component-definition (load-time-value (find-class 'effective-table-aggregate-component-definition)))
+      (direct-eager-table-aggregate-component-definition (load-time-value (find-class 'effective-eager-table-aggregate-component-definition)))
       ;;(direct-maintained-slot-definition (load-time-value (find-class 'effective-maintained-slot-definition)))
       (t (call-next-method)))))
 
@@ -767,56 +971,105 @@
    (indices :reader component-indices :initform nil :initarg :indices)
    (inittest :initform nil)))
 
-(defmethod shared-initialize :after ((instance adhoc-mixin) slot-names &rest initargs)
-  (declare (ignore initargs slot-names))
-  (unless (superior instance)
-    (setf (slot-value instance 'root) instance)
-    #+NOTYET
-    (let* ((class (class-of instance))
-	   (eslotds (class-slots class)))
-      (loop for eslotd in eslotds
-	    when (typep eslotd 'eager-input-mixin)
-	      do (compute-eager-slot instance eslotd))
-      (loop for eslotd in eslotds
-	    when (typep eslotd 'eager-attribute-mixin)
-	      do (compute-eager-slot instance eslotd))))
+(defclass adhoc-scene-graph::node-mixin (adhoc-mixin)
+  ()
+  (:metaclass adhoc-class))
+
+(defgeneric adhoc-scene-graph::rm-redraw-node (node)
+  (:method (node) (values)))
+
+(defgeneric adhoc-scene-graph::rm-draw-node (node)
+  (:method (node) (values)))
+
+(defgeneric adhoc-scene-graph::rm-erase-node (node)
+  (:method (node) (values)))
+
+(defgeneric adhoc-scene-graph::rm-retransform-node (node)
+  (:method (node) (values)))
+
+(defun initialize-eager-slots (instance)
+  ;; the ordinary-input-definitions should have already been setf'd
+  ;; by the main normal shared-initialize method
+  ;; at top-level 'defaulting' ordinary inputs and defaulting optional inputs
+  ;; behave the same as ordinary inputs and optional inputs
+  (let* ((class (class-of instance))
+	 (eslotds (class-slots class)))
+    ;; so now we need to compute the effective-eager-optional-input-definitions
+    (loop for eslotd in eslotds
+	  when (typep eslotd 'eager-optional-input-definition-mixin)
+	    do (ensure-slot-value class instance eslotd)
+	       (setq eslotds (remove eslotd eslotds)))
+    (loop for eslotd in eslotds
+	  when (typep eslotd 'effective-eager-ordinary-attribute-definition-mixin)
+	    do (ensure-slot-value class instance eslotd)
+	       (setq eslotds (remove eslotd eslotds)))
+    (loop for eslotd in eslotds
+	  when (typep eslotd 'effective-eager-component-definition-mixin)
+	    do (ensure-slot-value class instance eslotd)
+	       (setq eslotds (remove eslotd eslotds)))
+    (loop for eslotd in eslotds
+	  when (typep eslotd 'effective-eager-array-aggregate-component-definition-mixin)
+	    do (ensure-slot-value class instance eslotd)
+	       (setq eslotds (remove eslotd eslotds)))
+    (loop for eslotd in eslotds
+	  when (typep eslotd 'effective-eager-table-aggregate-component-definition-mixin)
+	    do (ensure-slot-value class instance eslotd)
+	       (setq eslotds (remove eslotd eslotds)))
+    (values)))
+	     
+
+
+(defmethod initialize-instance :before ((instance adhoc-mixin) &rest initargs
+					&key superior &allow-other-keys)
+  (declare (ignore initargs))
+  (unless superior
+    (setf (slot-value instance 'root) instance))
   (values))
 
-(defmethod shared-initialize :around ((instance adhoc-mixin) slot-names &rest initargs)
-  (declare (ignore initargs slot-names))
+(defmethod initialize-instance :around ((instance adhoc-mixin) &rest initargs)
+  (declare (ignore initargs))
   (prog1 (call-next-method)
+    (initialize-eager-slots instance)
     (setf (slot-value instance 'inittest) t)))
-
-(defgeneric aggregate-lookup (aggregate &rest indices))
-
 
 ;; slow method for looking up slotd objects on class
 (defmethod get-slot-definition (class (slot-name symbol))
   (let ((slotds (class-slots class)))
     (loop for slotd in slotds
-       when (or (eq (slot-definition-name slotd) slot-name))
-       return slotd)))
+	  when (or (eq (slot-definition-name slotd) slot-name))
+	    return slotd)))
 
 (defmethod get-slot-definition (class (location integer))
   (let ((slotds (class-slots class)))
     (loop for slotd in slotds
-       when (or (eq (slot-definition-location slotd) location))
-       return slotd)))
+	  when (or (eq (slot-definition-location slotd) location))
+	    return slotd)))
 
-(defclass variable ()
-  ((value :accessor variable-value :initarg :value)
-   (dependents :accessor dependents :initform nil)
-   (root-path :reader variable-root-path :initarg :root-path)
-   (slot-name :reader slot-name :initarg :slot-name)
-   (instance :accessor variable-instance :initarg :instance)))
+(defclass basket ()
+  ((value :accessor basket-value :initarg :value)
+   (dependents :accessor dependents)
+   (status :accessor basket-status)))
+
+(defmethod print-object ((object basket) stream)
+  (print-unreadable-object (object stream)
+    (princ "BASKET value = " stream)
+    (if (slot-boundp object 'value)
+	(princ (slot-value object 'value) stream)
+	(princ +slot-unbound+ stream))
+    (princ " " stream)
+    (when (basket-status object)
+      (princ (basket-status object) stream))
+    object))
+	   
 
 ;; to have a place where settable-slots can differentiate between cached and setf'd
-(defclass settable-variable (variable)
-  ((status :accessor variable-status :initform nil)))
+;;(defclass settable-variable (variable)
+;;  ((status :accessor variable-status :initform nil)))
 
-(defclass parameter (settable-variable)
-  ())
+;;(defclass parameter (settable-variable)
+  ;;())
 
+#+NIL
 (defmethod print-object ((object parameter) stream)
   (print-unreadable-object (object stream :type t)
     (if (slot-boundp object 'value)
@@ -825,6 +1078,7 @@
     object))
 
 ;; to have an dependency maintenance location for the class of the subpart
+#+NIL
 (defclass component-variable (variable)
   ((class)
    (indices :initarg :indices)))
@@ -833,12 +1087,16 @@
   ((root :initform nil :initarg :root)
    (superior :reader superior :initform nil :initarg :superior)
    (component-definition :reader component-definition :initform nil :initarg :component-definition)
-   (value :reader variable-value :initarg :value)
-   (dependents :accessor dependents :initform nil)
-   (root-path :reader variable-root-path :initarg :root-path)
-   (slot-name :reader slot-name :initarg :slot-name)
-   (instance :accessor instance :initarg :instance))
-  (:metaclass funcallable-adhoc-class))  
+   (value :reader basket-value :initarg :value)
+   (dependents :accessor dependents :initform nil))
+  (:metaclass funcallable-adhoc-class))
+
+(defmethod initialize-instance :around ((instance aggregate-mixin) &rest initargs)
+  (declare (ignore initargs))
+  (prog1 (call-next-method)
+    (when (typep (component-definition instance) 'eager-attribute-definition-mixin)
+      (loop for child in (send instance list-elements)
+	    do (initialize-eager-slots child)))))
 
 (defclass array-aggregate-mixin (aggregate-mixin)
   ()
@@ -856,10 +1114,12 @@
   ()
   (:metaclass funcallable-adhoc-class))
 
+#+NIL
 (defun variable-p (thing)
   (or (typep thing 'variable)
       (typep thing 'aggregate-mixin)))
 
+#+NIL
 (defmethod print-object ((object variable) stream)
   (print-unreadable-object (object stream)
     (princ "DAG VARIABLE " stream)
@@ -872,17 +1132,17 @@
 (defmethod print-object ((object array-aggregate) stream)
   (print-unreadable-object (object stream)
     (princ "ARRAY-AGGREGATE " stream)
-    #+NOTYET
-    (when (slot-boundp object 'slot-name)
-      (princ (slot-name object) stream))))
+    (princ (slot-definition-name (component-definition object)) stream)
+    object))
 
 (defmethod print-object ((object table-aggregate) stream)
   (print-unreadable-object (object stream)
     (princ "TABLE-AGGREGATE " stream)
-    #+NOTYET
-    (when (slot-boundp object 'slot-name)
-      (princ (slot-name object) stream))))
+    (princ (slot-definition-name (component-definition object)) stream)
+    object))
+    
 
+#+NIL
 (defmethod print-object ((object settable-variable) stream)
   (print-unreadable-object (object stream)
     (princ "SETTABLE DAG VARIABLE " stream)
@@ -899,6 +1159,7 @@
       (princ " DEPENDENTS: " stream)
       (princ (dependents object) stream))))
 
+#+NIL
 (defmethod print-object ((object component-variable) stream)
   (print-unreadable-object (object stream)
     (princ "COMPONENT VARIABLE " stream)
@@ -912,24 +1173,31 @@
       (princ (variable-value object) stream))))
 
 ;; the variable-type generic function computes the type of the variable from the type of the slot
+#+NIL
 (defmethod variable-type ((slotd t))
   nil)
 
+#+NIL
 (defmethod variable-type ((slotd basic-attribute-definition-mixin))
   (load-time-value (find-class 'variable)))
 
+#+NIL
 (defmethod variable-type ((slotd effective-settable-slot-definition-mixin))
   (load-time-value (find-class 'settable-variable)))
 
+#+NIL
 (defmethod variable-type ((slotd effective-parametric-slot-definition))
   (load-time-value (find-class 'parameter)))
 
+#+NIL
 (defmethod variable-type ((slotd component-definition-mixin))
   (load-time-value (find-class 'component-variable)))
 
+#+NIL
 (defmethod variable-type ((slotd array-aggregate-component-definition-mixin))
   (load-time-value (find-class 'array-aggregate)))
 
+#+NIL
 (defmethod variable-type ((slotd table-aggregate-component-definition-mixin))
   (load-time-value (find-class 'table-aggregate)))
 
@@ -944,27 +1212,33 @@
     (if (null location)
 	(slot-missing (class-of instance) instance slot-name 'slot-value)
 	(setf (standard-instance-access instance location)
-	      value))))					
+	      value))))
 
-;; slot variable is like slot-value except it returns the variable instead of the value
+(declaim (inline allocate-basket))
+(defun allocate-basket ()
+  (let ((b (allocate-instance (load-time-value (find-class 'basket)))))
+    (declare (type basket b))
+    (setf (slot-value b 'dependents) nil)
+    (setf (slot-value b 'status) nil)
+    b))
+  
+
+;; slot basket is like slot-value except it returns the basket instead of the value
 ;; used in the constraint solver or for debugging purposes
 
-(defmethod slot-variable (instance (slot-name symbol))
+(defmethod slot-basket (instance (slot-name symbol))
   (let* ((class (class-of instance))
 	 (location (gethash slot-name (slot-locations class))))
     (if (null location)
 	(slot-missing (class-of instance) instance slot-name 'slot-value)
         ;; if it's already there it's fast, else it's slow
-	(let ((maybe-variable (standard-instance-access-compat instance location)))
-	  (if (eq +slot-unbound+ maybe-variable)
-	      (let ((slotd (get-slot-definition class location)))
-		(setf (standard-instance-access instance location)
-		      (make-instance (variable-type slotd)
-				     :root-path (root-path2 instance) ;; this will be a slowdown
-				     :slot-name (slot-definition-name slotd)
-                                     :instance instance)))
-	      maybe-variable)))))
+	(let ((maybe-basket (standard-instance-access-compat instance location)))
+	  (if (eq +slot-unbound+ maybe-basket)
+	      (setf (standard-instance-access instance location)
+		    (allocate-basket))
+	      maybe-basket)))))
 
+#+NIL
 (defmethod (setf slot-variable) (variable instance (slot-name symbol))
   (let* ((class (class-of instance))
 	 (location (gethash slot-name (slot-locations class))))
@@ -972,8 +1246,13 @@
 	(slot-missing (class-of instance) instance slot-name 'slot-value)
 	(setf (standard-instance-access instance location) variable))))
 
-(defmethod slot-variable (instance (eslotd basic-attribute-definition-mixin))
-  (get-variable instance eslotd))
+(defmethod slot-basket (instance (eslotd basic-attribute-definition-mixin))
+  (let* ((location (slot-definition-location eslotd))
+	 (maybe-basket (standard-instance-access-compat instance location)))
+    (if (eq +slot-unbound+ maybe-basket)
+	(setf (standard-instance-access instance location)
+	      (allocate-basket))
+	maybe-basket)))
 
 ;; like with slots but fetches the variable instead of the value.
 (defmacro with-variables (slots instance &body body)
@@ -992,37 +1271,63 @@
 	     slots)
 	 ,@body))))
 
-(defun get-variable (instance slotd &optional (root nil root-present-p)
-				      (superior nil superior-present-p)
-				      (component-definition nil component-definition-present-p))
-  (let* ((location (slot-definition-location slotd))
-	 (maybe-variable (standard-instance-access-compat instance location)))
-    (if (eq +slot-unbound+ maybe-variable)
-	(let* ((variable-type (variable-type slotd))
-	       (variable (apply #'make-instance variable-type
-			        :root-path (root-path2 instance) ;; this will be a slowdown
-			        :slot-name (slot-definition-name slotd)
-                                :instance instance
-			        (append (when root-present-p
-				          (list :root root))
-				        (when superior-present-p
-				          (list :superior superior))
-				        (when component-definition-present-p
-				          (list :component-definition component-definition))))))
-	  (setf (standard-instance-access instance location) variable))
-	maybe-variable)))
+(defmethod aggregate-class ((slotd table-aggregate-component-definition-mixin))
+  (load-time-value (find-class 'table-aggregate)))
 
-(defun get-variable-fi (owner instance slotd)
+(defmethod aggregate-class ((slotd array-aggregate-component-definition-mixin))
+  (load-time-value (find-class 'array-aggregate)))
+
+(defmethod slot-basket (instance (slotd aggregate-component-definition-mixin))
   (let* ((location (slot-definition-location slotd))
-	 (maybe-variable (funcallable-standard-instance-access instance location)))
-    (if (eq +slot-unbound+ maybe-variable)
-	(let* ((variable-type (variable-type slotd))
-	       (variable (make-instance variable-type
-					:root-path (root-path2 instance) ;; this will be a slowdown
-					:slot-name (slot-definition-name slotd)
-                    :instance owner)))
-	  (setf (funcallable-standard-instance-access instance location) variable))
-	maybe-variable)))
+	 (maybe-aggregate (standard-instance-access-compat instance location)))
+    (if (eq +slot-unbound+ maybe-aggregate)
+	(make-instance (aggregate-class slotd)			      
+		       :instance instance
+		       :location location
+		       :root (slot-value instance 'root)
+		       :superior instance
+		       :component-definition slotd)
+	maybe-aggregate)))
+
+
+(defmethod get-aggregate-member-basket ((aggregate table-aggregate) slot-name indices)
+  (if (member indices (send aggregate indices) :test #'equalp)
+      (let* ((ht (slot-value aggregate 'value))
+	     (maybe-basket (gethash indices ht +slot-unbound+)))
+	(if (eq +slot-unbound+ maybe-basket)
+	    (let* ((basket (allocate-basket)))
+	      (setf (gethash indices ht) basket))
+	    maybe-basket))
+      (error "Aggregate indices ~S for ~S on ~S not found."
+	     indices
+	     slot-name
+	     (superior aggregate))))
+      
+
+(defmethod get-aggregate-member-basket ((aggregate array-aggregate) slot-name indices)
+  (handler-bind ((#+SBCL sb-int:invalid-array-index-error
+		  #+CCL error
+		  #+ALLEGRO error
+		  #'(lambda (e)
+		      (declare (ignore e))
+		      (error "Aggregate indices ~S for ~S on ~S not found."
+			     indices
+			     slot-name
+			     (superior aggregate)))))
+    (let* ((array (slot-value aggregate 'value))
+	   (maybe-basket (apply #'aref array indices)))
+      (if (eq +slot-unbound+ maybe-basket)
+	  (setf (apply #'aref array indices)
+		(allocate-basket))
+	  maybe-basket))))
+
+(defmethod slot-basket ((instance aggregate-mixin) slotd)
+  (let* ((location (slot-definition-location slotd))
+	 (maybe-basket (funcallable-standard-instance-access instance location)))
+    (if (eq +slot-unbound+ maybe-basket)
+	(setf (funcallable-standard-instance-access instance location)
+	      (allocate-basket))
+	maybe-basket)))
 
 (defmethod slot-value-using-class ((class adhoc-class) instance
 				   (slotd effective-ordinary-virtual-slot-definition))
@@ -1037,13 +1342,23 @@
 				    (slotd effective-ordinary-virtual-slot-definition))
   t)
 
+
+  
+
 (defmethod (setf slot-value-using-class) (value (class adhoc-class) instance
 					  (slotd effective-settable-slot-definition-mixin))
-  (let ((variable (get-variable instance slotd)))
-    (prog1
-	(setf (slot-value variable 'value) value)
+  (let ((basket (slot-basket instance slotd)))
+    (declare (type basket basket))
+    
+    (prog1 (setf (slot-value basket 'value) value)
+
+      (when (and (slot-boundp instance 'inittest)
+		 (slot-value instance 'inittest))
+	(frob-dependents basket))
       
-      (unbind-dependent-variables variable :force t)
+      (setf (basket-status basket) :set)
+    
+      #+NOTYET
       (unwind-protect
 	   (when (noticers slotd)
 	     ;; noticers will not run until inittest is set to non-nil value
@@ -1052,7 +1367,28 @@
 	       (loop for noticer in (noticers slotd)
 		     do
 			(funcall noticer instance value))))
-	(setf (variable-status variable) :set)))))
+	(setf (variable-status variable) :set))
+
+      )))
+
+(defmethod (setf slot-value-using-class) (value (class adhoc-class) instance
+					  (slotd visual-mixin))
+
+  (let ((basket (slot-basket instance slotd)))
+    (declare (type basket basket))
+    
+    (prog1 (setf (slot-value basket 'value) value)
+
+      (when (and (slot-boundp instance 'inittest)
+		 (slot-value instance 'inittest))
+	(progn
+	  (when (typep instance 'adhoc-scene-graph::node-mixin)
+	    (adhoc-scene-graph::rm-redraw-node instance))
+	  
+	  (frob-dependents basket :redraw? t)))
+      
+      (setf (basket-status basket) :set))))
+  
 
 (defmethod (setf slot-value-using-class) (value (class adhoc-class) instance
 					  (slotd effective-non-settable-slot-definition-mixin))
@@ -1060,53 +1396,72 @@
   (error "slot ~S of type ~S is read only" (slot-definition-name slotd) (class-name (class-of slotd))))
 
 (defmethod slot-makunbound-using-class ((class adhoc-class) instance (slotd effective-basic-attribute-definition-mixin))
-  (let ((variable (get-variable instance slotd)))
-    (slot-makunbound variable 'value)
-    (unbind-dependent-variables variable :force nil)
+  (let ((basket (slot-basket instance slotd)))
+    (slot-makunbound basket 'value)
+    (frob-dependents basket)
     (values)))
 
-(defparameter *dependent* nil)
+(defparameter %dependent% nil)
 
-(defmacro with-dependent-notification ((variable) &body body)
-  `(let ((*dependent* ,variable))
+(defparameter %recompute% nil)
+
+(declaim (inline recompute?))
+(defun recompute? (object slotd indices)
+  (member (list object slotd indices) %recompute% :test #'equal))
+
+(defmacro with-dependee-advisement ((object slotd &optional indices) &body body)
+  `(let* ((%dependent% (list ,object ,slotd ,indices))
+	  (%recompute% (remove %dependent% %recompute% :test #'equal)))
      ,@body))
 
-(declaim (inline capture-direct-dependency))
-(defun capture-direct-dependency (variable)
-  (when *dependent*
-    (pushnew *dependent* (dependents variable) :test #'eq)))
+(defmacro capture-direct-dependent (instance basket)
+  `(when (and %dependent% (eq (slot-value ,instance 'root) (slot-value (car %dependent%) 'root)))
+     ;; only capture the dependent if the dependent and the instance are in the same tree.
+     (pushnew %dependent% (dependents ,basket) :test #'equal)))
 
 (defmacro without-dependency-capture (&body body)
-  `(let ((*dependent* nil))
+  `(let ((%dependent% nil))
      ,@body))
 
-(defmethod slot-value-using-class ((class adhoc-class) instance (slotd effective-attribute-function-mixin))
-  ;; we must capture any dependency coming from any attribute access which,
-  ;; in it's expression, somehow landed us here.
-  ;; however, we only need to send notification when we are actually evaluating any code, since that is the only time
-  ;; that any other attributes will be accessed, not during a cache fetch
-  ;; capture-direct-dependency and with-dependent-notification perform these functions, respectively.
-  (let* ((variable (get-variable instance slotd)))
-    (capture-direct-dependency variable)
-    (if (slot-boundp variable 'value)
-	(slot-value variable 'value)
-	(setf (slot-value variable 'value)
-	      (with-dependent-notification (variable)
-		(funcall (attribute-function slotd) instance))))))
+(defmethod slot-value-using-class ((class adhoc-class) instance (slotd effective-basic-attribute-definition-mixin))
+  (slot-value (cl:the basket (ensure-slot-value class instance slotd)) 'value))
 
-(defmethod slot-value-using-class ((class funcallable-adhoc-class) instance (slotd effective-attribute-function-mixin))
+(defmethod slot-value-using-class ((class funcallable-adhoc-class) instance (slotd effective-basic-attribute-definition-mixin))
+  (slot-value (cl:the basket (ensure-slot-value class instance slotd)) 'value))
+
+
+
+
+(defmethod ensure-slot-value ((class adhoc-class) (instance adhoc-mixin) (slotd attribute-function-mixin))
   ;; we must capture any dependency coming from any attribute access which,
   ;; in it's expression, somehow landed us here.
   ;; however, we only need to send notification when we are actually evaluating any code, since that is the only time
   ;; that any other attributes will be accessed, not during a cache fetch
-  ;; capture-direct-dependency and with-dependent-notification perform these functions, respectively.
-  (let* ((variable (get-variable-fi (slot-value instance 'superior) instance slotd)))
-    (capture-direct-dependency variable)
-    (if (slot-boundp variable 'value)
-	(slot-value variable 'value)
-	(setf (slot-value variable 'value)
-	      (with-dependent-notification (variable)
-		(funcall (attribute-function slotd) instance))))))
+  ;; capture-direct-dependent and with-dependee-advisement perform these functions, respectively.
+  (let* ((basket (slot-basket instance slotd)))
+    (declare (type basket basket))
+    (capture-direct-dependent instance basket)
+    (when (or (not (slot-boundp basket 'value)) (recompute? instance slotd nil))
+      (setf (slot-value basket 'value)
+	    (with-dependee-advisement (instance slotd)
+	      (funcall (attribute-function slotd) instance))))
+    
+    basket))
+
+(defmethod ensure-slot-value ((class funcallable-adhoc-class) (aggregate aggregate-mixin) (slotd attribute-function-mixin))
+  ;; we must capture any dependency coming from any attribute access which,
+  ;; in it's expression, somehow landed us here.
+  ;; however, we only need to send notification when we are actually evaluating any code, since that is the only time
+  ;; that any other attributes will be accessed, not during a cache fetch
+  ;; capture-direct-dependent and with-dependee-advisement perform these functions, respectively.
+  (let* ((basket (slot-basket aggregate slotd)))
+    (declare (type basket basket))
+    (capture-direct-dependent aggregate basket)
+    (when (or (not (slot-boundp basket 'value)) (recompute? aggregate slotd nil))
+      (setf (slot-value basket 'value)
+	    (with-dependee-advisement (aggregate slotd)
+	      (funcall (attribute-function slotd) aggregate))))
+    basket))
 
 (defmethod slot-value-using-class ((class adhoc-class) instance
 				   (slotd effective-uncached-attribute-definition))
@@ -1155,322 +1510,347 @@
 	(indices-function instance) (getf initargs :indices-function))
   (values))
 
-(defmethod slot-value-using-class ((class adhoc-class) instance
-				   (slotd effective-component-definition-mixin))
-  (let* ((variable (get-variable instance slotd)))
-    (capture-direct-dependency variable)
-    (if (slot-boundp variable 'class)
-	(if (slot-boundp variable 'value)
-	    (slot-value variable 'value)
-	    (setf (slot-value variable 'value)
-		  (make-instance (slot-value variable 'class)
-				 :root (slot-value instance 'root)
-				 :superior instance
-				 :component-definition slotd)))
-	(progn
-	  (setf (slot-value variable 'class)
-		(with-dependent-notification (variable)
-		  (let ((type (funcall (class-spec-function slotd) instance)))
-		    (if (symbolp type)
-			(find-class type)
-			type))))
-	  (setf (slot-value variable 'value)
-		(make-instance (slot-value variable 'class)
-			       :root (slot-value instance 'root)
-			       :superior instance
-			       :component-definition slotd))))))
+(defmethod ensure-slot-value ((class adhoc-class) (instance adhoc-mixin)
+			      (slotd component-definition-mixin))
+  (let* ((basket (slot-basket instance slotd)))
+    (declare (type basket basket))
+    (capture-direct-dependent instance basket)
+    (when (or (not (slot-boundp basket 'value)) (recompute? instance slotd nil))
+      (let ((child (make-instance 
+		    (with-dependee-advisement (instance slotd)
+		      (funcall (class-spec-function slotd) instance))
+		    :root (slot-value instance 'root)
+		    :superior instance
+		    :component-definition slotd)))
+	(setf (slot-value basket 'value) child)))
+    basket))
 
+
+
+
+(defmethod ensure-slot-value ((class adhoc-class) (instance adhoc-mixin)
+			      (slotd table-aggregate-component-definition-mixin))
+  (let* ((aggregate (slot-basket instance slotd)))
+    (declare (type table-aggregate aggregate))
+    (capture-direct-dependent instance aggregate)
+    (when (or (not (slot-boundp aggregate 'value)) (recompute? instance slotd nil))
+      (setf (slot-value aggregate 'value) (make-hash-table :test #'equalp)))
+    aggregate))
 
 (defmethod slot-value-using-class ((class adhoc-class) instance
 				   (slotd aggregate-component-definition-mixin))
-  (let* ((variable (get-variable instance slotd (slot-value instance 'root) instance slotd)))
-    (capture-direct-dependency variable)
-    (if (slot-boundp variable 'value)
-	(slot-value variable 'value)
-	(progn
-	  (setf (slot-value variable 'value)
-		(with-dependent-notification (variable)
-		  (if (typep slotd 'table-aggregate-component-definition-mixin)
-		      (make-hash-table :test #'equalp)
-		      (let ((size (funcall (size-function slotd) instance)))
-			(make-array size :initial-element nil)))))
-	  (set-funcallable-instance-function
-	   variable
-	   #'(lambda (&rest indices)
-	       (apply #'aggregate-lookup variable indices)))))
-    variable))
-  
-(defmethod slot-value-using-class ((class adhoc-class) instance
-				                   (slotd effective-ordinary-input-definition))
-  (let* ((variable (get-variable instance slotd)))
-    (capture-direct-dependency variable)
-    (if (slot-boundp variable 'value)
-	    (slot-value variable 'value)
-	    (setf (slot-value variable 'value)
-	          (flet ((unbound ()
-		               (slot-unbound class instance (slot-definition-name slotd))))
-		        (let ((component-definition (component-definition instance))
-		              (initarg (first (slot-definition-initargs slotd))))
-		          (if component-definition
-		              (let* ((provided-input-function-plist (apply #'provided-inputs component-definition
-								                                   (slot-value instance 'indices))))
-				(labels ((has-descending? (instance slot-name)
-					   (if (member slot-name (slot-value (class-of instance) 'effective-descending-attributes) :test #'eq)
-					       (slot-value instance slot-name)
-					       (if (superior instance)
-						   (has-descending? (superior instance) slot-name)
-						   (unbound))))
-					 (normal-lookup ()
-					   (let ((input-function (getf provided-input-function-plist initarg)))
-					     (if input-function
-						 (with-dependent-notification (variable)
-						   (funcall input-function (superior instance) instance))
-						 (has-descending? (superior instance) (slot-definition-name slotd))))))
-			              (let ((plist-function (getf provided-input-function-plist :@)))
-			                (if plist-function
-				                (let ((plist (with-dependent-notification (variable)
-					                           (funcall plist-function (superior instance) instance))))
-				                  (let ((result (getf plist initarg +slot-unbound+)))
-				                    (if (eq result +slot-unbound+)
-					                    (normal-lookup)
-					                    result)))
-				                (normal-lookup)))))
-		              (unbound))))))))
+  (ensure-slot-value class instance slotd))
 
-(defmethod slot-value-using-class ((class adhoc-class) instance
-				   (slotd effective-optional-input-definition))
-  (let* ((variable (get-variable instance slotd)))
-    (capture-direct-dependency variable)
-    (if (slot-boundp variable 'value)
-	(slot-value variable 'value)
-	(setf (slot-value variable 'value)
-	      (flet ((get-toplevel ()
-		       (with-dependent-notification (variable)
-			 (funcall (attribute-function slotd) instance))))
-		(let ((component-definition (component-definition instance))
-		      (initarg (first (slot-definition-initargs slotd))))
-		  (if component-definition
-		      (let* ((provided-input-function-plist (apply #'provided-inputs component-definition
-								   (slot-value instance 'indices))))
-			(flet ((normal-lookup ()
+
+(defmethod shared-initialize :before ((aggregate aggregate-mixin) slot-names
+				      &rest initargs &key instance location &allow-other-keys)
+									      
+  (declare (ignore slot-names initargs))
+  (setf (standard-instance-access instance location) aggregate)
+  (set-funcallable-instance-function
+   aggregate
+   #'(lambda (&rest indices)
+       (apply #'aggregate-lookup aggregate indices)))
+  (values))  
+
+(defmethod ensure-slot-value ((class adhoc-class) (instance adhoc-mixin)
+			      (slotd array-aggregate-component-definition-mixin))
+  (let* ((aggregate (slot-basket instance slotd)))
+    (declare (type array-aggregate aggregate))
+    (capture-direct-dependent instance aggregate)
+    (when (or (not (slot-boundp aggregate 'value)) (recompute? instance slotd nil))
+      (setf (slot-value aggregate 'value)
+	    (make-array
+	     (with-dependee-advisement (instance slotd)
+	       (funcall (size-function slotd) instance))
+	     :initial-element +slot-unbound+)))
+    aggregate))
+  
+(defmethod ensure-slot-value ((class adhoc-class) (instance adhoc-mixin)
+			      (slotd input-definition-mixin))
+  (let* ((basket (slot-basket instance slotd)))
+    (declare (type basket basket))
+    (capture-direct-dependent instance basket)
+    (when (or (not (slot-boundp basket 'value)) (recompute? instance slotd nil))
+      (setf (slot-value basket 'value)
+	    (flet ((unbound ()
+		     (slot-unbound class instance (slot-definition-name slotd))))
+	      (let ((component-definition (component-definition instance))
+		    (initarg (first (slot-definition-initargs slotd))))
+		(if component-definition
+		    (let* ((provided-input-function-plist (apply #'provided-inputs component-definition
+								 (slot-value instance 'indices))))
+		      (labels ((has-descending? (instance slot-name)
+				 (if (member slot-name (slot-value (class-of instance)
+								   'effective-descending-attributes)
+					     :test #'eq)
+				     (slot-value instance slot-name)
+				     (if (superior instance)
+					 (has-descending? (superior instance) slot-name)
+					 (unbound))))
+			       (normal-lookup ()
 				 (let ((input-function (getf provided-input-function-plist initarg)))
 				   (if input-function
-				       (with-dependent-notification (variable)
+				       (with-dependee-advisement (instance slotd)
 					 (funcall input-function (superior instance) instance))
-				       (get-toplevel)))))
-			  (let ((plist-function (getf provided-input-function-plist :@)))
-			    (if plist-function
-				(let ((plist (with-dependent-notification (variable)
-					       (funcall plist-function (superior instance) instance))))
-				  (let ((result (getf plist initarg +slot-unbound+)))
-				    (if (eq result +slot-unbound+)
-					(normal-lookup)
-					result)))
-				(normal-lookup)))))
-		      (get-toplevel))))))))
+				       (has-descending? (superior instance) (slot-definition-name slotd))))))
+			(let ((plist-function (getf provided-input-function-plist :@)))
+			  (if plist-function
+			      (let ((plist (with-dependee-advisement (instance slotd)
+					     (funcall plist-function (superior instance) instance))))
+				(let ((result (getf plist initarg +slot-unbound+)))
+				  (if (eq result +slot-unbound+)
+				      (normal-lookup)
+				      result)))
+			      (normal-lookup)))))
+		    (unbound))))))
+    basket))
 
-(defmethod slot-value-using-class ((class adhoc-class) instance
-				   (slotd effective-defaulting-optional-input-definition))
-  (let* ((variable (get-variable instance slotd)))
-    (capture-direct-dependency variable)
-    (if (slot-boundp variable 'value)
-	(slot-value variable 'value)
-	(setf (slot-value variable 'value)
-	      (flet ((get-toplevel ()
-		       (with-dependent-notification (variable)
-			 (funcall (attribute-function slotd) instance))))
-		(let ((component-definition (component-definition instance))
-		      (initarg (first (slot-definition-initargs slotd))))
-		  (if component-definition
-		      (let* ((provided-input-function-plist (apply #'provided-inputs component-definition
-								   (slot-value instance 'indices))))
-			(labels ((normal-lookup ()
-				   (let* ((input-function (getf provided-input-function-plist initarg)))
-				     (if input-function
-					 (with-dependent-notification (variable)
-					   (funcall input-function (superior instance) instance))
-					 (get-toplevel))))
-				 (answers-message? (instance message)
-				   (if (slot-exists-p instance message)
-				       instance
-				       (when (superior instance)
-					 (answers-message? (superior instance) message)))))
-			  (let* ((slotd-name (slot-definition-name slotd))
-				 (ancestor (answers-message? (superior instance) slotd-name)))
-			    (if ancestor
-				(slot-value ancestor slotd-name)
-				(let ((plist-function (getf provided-input-function-plist :@)))
-				  (if plist-function
-				      (let ((plist (with-dependent-notification (variable)
-						     (funcall plist-function (superior instance) instance))))
-					(let ((result (getf plist initarg +slot-unbound+)))
-					  (if (eq result +slot-unbound+)
-					      (normal-lookup)
-					      result)))
-				      (normal-lookup)))))))
-		      (get-toplevel))))))))
+(defmethod ensure-slot-value ((class adhoc-class) (instance adhoc-mixin)
+			      (slotd optional-input-definition-mixin))
+  (let* ((basket (slot-basket instance slotd)))
+    (declare (type basket basket))
+    (capture-direct-dependent instance basket)
+    (when (or (not (slot-boundp basket 'value)) (recompute? instance slotd nil))
+      (setf (slot-value basket 'value)
+	    (flet ((get-toplevel ()
+		     (with-dependee-advisement (instance slotd)
+		       (funcall (attribute-function slotd) instance))))
+	      (let ((component-definition (component-definition instance))
+		    (initarg (first (slot-definition-initargs slotd))))
+		(if component-definition
+		    (let* ((provided-input-function-plist (apply #'provided-inputs component-definition
+								 (slot-value instance 'indices))))
+		      (flet ((normal-lookup ()
+			       (let ((input-function (getf provided-input-function-plist initarg)))
+				 (if input-function
+				     (with-dependee-advisement (instance slotd)
+				       (funcall input-function (superior instance) instance))
+				     (get-toplevel)))))
+			(let ((plist-function (getf provided-input-function-plist :@)))
+			  (if plist-function
+			      (let ((plist (with-dependee-advisement (instance slotd)
+					     (funcall plist-function (superior instance) instance))))
+				(let ((result (getf plist initarg +slot-unbound+)))
+				  (if (eq result +slot-unbound+)
+				      (normal-lookup)
+				      result)))
+			      (normal-lookup)))))
+		    (get-toplevel))))))
+    basket))
 
-(defmethod slot-value-using-class ((class adhoc-class) instance
-				   (slotd effective-defaulting-ordinary-input-definition))
-  (let* ((variable (get-variable instance slotd)))
-    (capture-direct-dependency variable)
-    (if (slot-boundp variable 'value)
-	(slot-value variable 'value)
-	(let ((component-definition (component-definition instance))
-	      (slotd-name (slot-definition-name slotd))
-	      (initarg (first (slot-definition-initargs slotd))))
-	  (if component-definition
-	      (labels ((answer-locally ()
-			 (let* ((provided-input-function-plist (apply #'provided-inputs component-definition
-								      (slot-value instance 'indices)))
-				(input-function (getf provided-input-function-plist initarg)))
-			   (if input-function
-			       (with-dependent-notification (variable)
-				 (funcall input-function (superior instance) instance))
-			       (slot-unbound class instance slotd-name))))
-		       (answers-message? (instance message)
-			 (if (slot-exists-p instance message)
-			     instance
-			     (when (superior instance)
-			       (answers-message? (superior instance) message)))))
-		(let ((ancestor (answers-message? (superior instance) slotd-name)))
-		  (if ancestor
-		      (slot-value ancestor slotd-name)
-		      (answer-locally))))
-	      (slot-unbound class instance slotd-name))))))
+(defmethod ensure-slot-value ((class adhoc-class) (instance adhoc-mixin)
+			      (slotd defaulting-optional-input-definition-mixin))
+  (let* ((basket (slot-basket instance slotd)))
+    (declare (type basket basket))
+    (capture-direct-dependent instance basket)
+    (when (or (not (slot-boundp basket 'value)) (recompute? instance slotd nil))
+      (setf (slot-value basket 'value)
+	    (flet ((get-toplevel ()
+		     (with-dependee-advisement (instance slotd)
+		       (funcall (attribute-function slotd) instance))))
+	      (let ((component-definition (component-definition instance))
+		    (initarg (first (slot-definition-initargs slotd))))
+		(if component-definition
+		    (let* ((provided-input-function-plist (apply #'provided-inputs component-definition
+								 (slot-value instance 'indices))))
+		      (labels ((normal-lookup ()
+				 (let* ((input-function (getf provided-input-function-plist initarg)))
+				   (if input-function
+				       (with-dependee-advisement (instance slotd)
+					 (funcall input-function (superior instance) instance))
+				       (get-toplevel))))
+			       (answers-message? (instance message)
+				 (if (slot-exists-p instance message)
+				     instance
+				     (when (superior instance)
+				       (answers-message? (superior instance) message)))))
+			(let* ((slotd-name (slot-definition-name slotd))
+			       (ancestor (answers-message? (superior instance) slotd-name)))
+			  (if ancestor
+			      (slot-value ancestor slotd-name)
+			      (let ((plist-function (getf provided-input-function-plist :@)))
+				(if plist-function
+				    (let ((plist (with-dependee-advisement
+						     (instance slotd)
+						   (funcall plist-function (superior instance) instance))))
+				      (let ((result (getf plist initarg +slot-unbound+)))
+					(if (eq result +slot-unbound+)
+					    (normal-lookup)
+					    result)))
+				    (normal-lookup)))))))
+		    (get-toplevel))))))
+    basket))
 
-(defmethod slot-value-using-class ((class adhoc-class) instance
-				   (slotd effective-maintained-slot-definition))
-  (let* ((variable (get-variable instance slotd)))
-    (capture-direct-dependency variable)
-    (if (slot-boundp variable 'value)
-	(slot-value variable 'value)
-	(slot-unbound class instance (slot-definition-name slotd)))))
+(defmethod ensure-slot-value ((class adhoc-class) (instance adhoc-mixin)
+			      (slotd defaulting-ordinary-input-definition-mixin))
+  (let* ((basket (slot-basket instance slotd)))
+    (declare (type basket basket))
+    (capture-direct-dependent instance basket)
+    (when (or (not (slot-boundp basket 'value)) (recompute? instance slotd nil))
+      (setf (slot-value basket 'value)
+	    (let ((component-definition (component-definition instance))
+		  (slotd-name (slot-definition-name slotd))
+		  (initarg (first (slot-definition-initargs slotd))))
+	      (if component-definition
+		  (labels ((answer-locally ()
+			     (let* ((provided-input-function-plist (apply #'provided-inputs component-definition
+									  (slot-value instance 'indices)))
+				    (input-function (getf provided-input-function-plist initarg)))
+			       (if input-function
+				   (with-dependee-advisement (instance slotd)
+				     (funcall input-function (superior instance) instance))
+				   (slot-unbound class instance slotd-name))))
+			   (answers-message? (instance message)
+			     (if (slot-exists-p instance message)
+				 instance
+				 (when (superior instance)
+				   (answers-message? (superior instance) message)))))
+		    (let ((ancestor (answers-message? (superior instance) slotd-name)))
+		      (if ancestor
+			  (slot-value ancestor slotd-name)
+			  (answer-locally))))
+		  (slot-unbound class instance slotd-name)))))
+    basket))
 
-(defmethod aggregate-lookup ((aggregate table-aggregate) &rest indices)
-  (let* ((table (slot-value aggregate 'value))
-	     (element (gethash indices table nil)))
-    (if element
-	    (progn (capture-direct-dependency aggregate) element)
-	
-	    (if (member indices (with-dependent-notification (aggregate)
-			                  (send aggregate indices))
-		            :test #'equalp)
-	        (progn (capture-direct-dependency aggregate)
-		           (setf (gethash indices table)
-			             (make-instance (with-dependent-notification (aggregate)
-					                      (apply (type-function (component-definition aggregate))
-						                         (superior aggregate)
-						                         indices))
-					                    :root (slot-value aggregate 'root)
-					                    :superior (slot-value aggregate 'superior)
-					                    :component-definition (component-definition aggregate)
-					                    :aggregate aggregate
-					                    :indices indices)))
-	        (error "~S is not an active index" indices)))))
+(defmethod ensure-slot-value ((class adhoc-class) (instance adhoc-mixin)
+			      (slotd effective-maintained-slot-definition))
+  (let* ((basket (slot-basket instance slotd)))
+    (declare (type basket basket))
+    (capture-direct-dependent instance basket)
+    (when (or (not (slot-boundp basket 'value)) (recompute? instance slotd nil))
+      (slot-unbound class instance (slot-definition-name slotd)))
+    basket))
 
-(defmethod aggregate-lookup ((aggregate array-aggregate) &rest indices)
-  (let* ((array (slot-value aggregate 'value))
-	     (element (handler-bind ((#+SBCL sb-int:invalid-array-index-error
-				      #+CCL error
-				      #+ALLEGRO error
-				                  #'(lambda (e)
-				                      (declare (ignore e))
-				                      (error "Aggregate indices ~S for ~S on ~S not found."
-					                         indices
-					                         (slot-value aggregate 'slot-name)
-					                         (superior aggregate)))))
-		            (apply #'aref array indices))))
+(defun aggregate-lookup (aggregate &rest indices)
+  (let ((basket (ensure-aggregate-member aggregate indices)))
+    (basket-value basket)))
 
-    (if element
-	    (progn
-	      (capture-direct-dependency aggregate)
-	      element)
-	    (flet ((new-instance ()
-		         (with-dependent-notification (aggregate)
-                   ;; to capture the dependency of the child object in any slot size-function calls
-		           (send aggregate size)
-		           (make-instance (apply (type-function (component-definition aggregate))
-					                     (superior aggregate)
-					                     indices)
-				                  :root (slot-value aggregate 'root)
-				                  :superior (slot-value aggregate 'superior)
-				                  :component-definition (component-definition aggregate)
-				                  :aggregate aggregate
-				                  :indices indices))))
-	      (capture-direct-dependency aggregate)
-	      (setf (apply #'aref array indices)
-		        (new-instance))))))
+(defun ensure-aggregate-member (aggregate indices)
+  (declare (type aggregate-mixin aggregate))
+  (let* ((slotd (component-definition aggregate))
+	 (basket (get-aggregate-member-basket aggregate slotd indices)))
+    (declare (type basket basket))
+    
+    (capture-direct-dependent aggregate basket)
+    
+    (when (or (not (slot-boundp basket 'value)) (recompute? aggregate slotd indices))
+      (let ((child (make-instance (with-dependee-advisement
+			       (aggregate slotd indices)
+			     (apply (type-function slotd)
+				    (superior aggregate)
+				    indices))
+			   :root (slot-value aggregate 'root)
+			   :superior (slot-value aggregate 'superior)
+			   :component-definition slotd
+			   :aggregate aggregate
+			   :indices indices)))
+	(setf (slot-value basket 'value) child)))
+    basket))
 
-(defmethod unbind-this-variable ((variable variable))
-  (slot-makunbound variable 'value)
+(defmethod unbind-aggregate-slot ((aggregate table-aggregate) indices)
+  (let ((basket (gethash indices (slot-value aggregate 'value))))
+    (slot-makunbound basket 'value)))
+
+(defmethod unbind-aggregate-slot ((aggregate array-aggregate) indices)
+  (handler-bind ((#+SBCL sb-int:invalid-array-index-error
+		  #+CCL error
+		  #+ALLEGRO error
+		  #'(lambda (e)
+		      (declare (ignore e))
+		      nil)))
+    (let* ((array (slot-value aggregate 'value))
+	   (maybe-basket (handler-bind ((#+SBCL sb-int:invalid-array-index-error
+					   #+CCL error
+					   #+ALLEGRO error
+					   #'(lambda (e)
+					       (declare (ignore e))
+					       nil)))
+			     (apply #'aref array indices))))
+      (when maybe-basket
+	(slot-makunbound maybe-basket 'value)))))  
+
+
+(defmethod frob-this-slot (class object (slotd basic-attribute-definition-mixin))
+  (let ((basket (slot-basket object slotd)))
+    ;; we don't want to erase basket dependents here
+    ;; because they may be used by an eager computation later
+    (unless (eq (basket-status basket) :set)
+      (slot-makunbound basket 'value))))
+
+(defmethod frob-this-slot :after (class object (slotd effective-global-matrix-attribute-definition))
+  (setf (slot-value object 'adhoc-scene-graph::retransform?) t)
   (values))
 
-(defmethod unbind-this-variable ((variable settable-variable))
-  (if (eq (variable-status variable) :set)
-      (values)
-      (call-next-method)))
+(defmethod frob-this-slot (class object (slotd eager-attribute-definition-mixin))
+  (ensure-slot-value class object slotd))
 
-(defmethod unbind-this-variable ((variable component-variable))
-  (call-next-method)
-  (slot-makunbound variable 'class)
-  (values))
+(defmethod frob-aggregate-member-slot ((slotd eager-attribute-definition-mixin) aggregate indices)
+  (ensure-aggregate-member aggregate indices))
 
-(defmethod unbind-dependent-variables (variable &key force)
-  (declare (ignore force))
-  (loop while (dependents variable)
-	do
-	   (let ((dependent-variable (pop (dependents variable))))
-	     (unwind-protect (unbind-dependent-variables dependent-variable)
-	       (unbind-this-variable dependent-variable)))))
-
-(defmethod unbind-dependent-variables ((variable settable-variable) &key (force nil))
-  (if (eq (variable-status variable) :set)
-      (if force
-	  (call-next-method)
-	  (values))
-      (call-next-method)))
-
-(defmethod unbind-dependent-variables ((variable array-aggregate-mixin) &key force)
-  (declare (ignore force))
-  (unwind-protect (when (slot-boundp variable 'value)
-		    (let ((value (slot-value variable 'value)))
-		      (loop for element across value
-			    when element
-			      do (unbind-instance-variables element))))
-    (call-next-method))
-  (values))
-
-(defmethod unbind-dependent-variables ((variable table-aggregate-mixin) &key force)
-  (declare (ignore force))
-  (when (slot-boundp variable 'value)
-    (let ((value (slot-value variable 'value)))
-      (unwind-protect (maphash #'(lambda (k v)
-				   (declare (ignore k))
-				   (unbind-instance-variables v))
-			       value)
-	(clrhash value))))
-  (call-next-method)
-  (values))
-
-(defmethod unbind-this-variable ((variable aggregate-mixin))
-  (slot-makunbound variable 'value)
-  (values))
-
-(defun unbind-instance-variables (instance)
-  (let* ((class (class-of instance))
-	 (eslotds (class-slots class)))
-    (loop for eslotd in eslotds
-          when (and (typep eslotd 'basic-attribute-definition-mixin)
-		    (let ((allocation (slot-definition-allocation eslotd)))
-		      (and allocation (not (eq allocation :none)))))
-       do (let ((maybe-variable (standard-instance-access-compat instance (slot-definition-location eslotd))))
-	    (unless (eq +slot-unbound+ maybe-variable)
-	      (when (variable-p maybe-variable)
-		(unwind-protect (unbind-dependent-variables maybe-variable)
-		  (unbind-this-variable maybe-variable))))))
-    (values)))
+(defmethod frob-aggregate-member-slot (slotd aggregate indices)
+  (unbind-aggregate-slot aggregate indices))
   
+(defun frob-dependents-1 (&key (redraw? nil))
+  (let ((frobbed-objects ()))
+    (loop for dependent in %recompute%
+	  do (destructuring-bind (object slotd indices) dependent
+	       ;; frobbing a slot either uncaches it or recomputes it
+	       ;; depending on whether it's lazy or eager
+	       (if indices
+		   ;; when indices are present, object is the aggregate
+		   ;; so as to avoid an extra slot-value call
+		   (let ((aggregate object))
+		     (frob-aggregate-member-slot slotd aggregate indices))
+			      
+		   (let ((class (class-of object)))
+		     (frob-this-slot class object slotd)
+		     (pushnew object frobbed-objects)))))
+
+    (loop for object in (nreverse frobbed-objects)
+	  when (and (typep object 'adhoc-scene-graph::node-mixin)
+		    redraw?)
+	    do (adhoc-scene-graph::rm-redraw-node object)
+	  when (and (typep object 'adhoc-scene-graph::node-mixin)
+		    (send object adhoc-scene-graph::retransform?))
+	    do (adhoc-scene-graph::rm-retransform-node object)
+	       (setf (slot-value object 'adhoc-scene-graph::retransform?) nil)))
+  (values))
+  
+
+(defun all-dependents (basket)
+  (sort
+   (remove-duplicates 
+    (loop for dependent in (prog1 (dependents basket) (setf (dependents basket) nil))
+	  append (list*
+		  dependent
+		  (destructuring-bind (object slotd indices) dependent
+		    (all-dependents
+		     (if indices
+			 (get-aggregate-member-basket object (slot-definition-name slotd) indices)
+			 (slot-basket object slotd)))))))
+   #'(lambda (dep1 dep2)
+       (let ((slot1 (cadr dep1))
+	     (slot2 (cadr dep2)))
+	 (if (and (typep slot1 'eager-attribute-definition-mixin)
+		  (typep slot2 'eager-attribute-definition-mixin))
+	     (if (and (typep slot1 'input-definition-mixin)
+		      (typep slot2 'input-definition-mixin))
+		 nil
+		 (when (typep slot1 'input-definition-mixin)
+		   t))
+	     (if (typep slot1 'eager-attribute-definition-mixin)
+		 t
+		 (if (and (typep slot1 'input-definition-mixin)
+			  (typep slot2 'input-definition-mixin))
+		     nil
+		     (when (typep slot1 'input-definition-mixin)
+		       t))))))))	  
+
+(defun frob-dependents (basket &key (redraw? nil))
+  (let ((%recompute% (all-dependents basket)))
+
+    (frob-dependents-1 :redraw? redraw?)))
       
 
 (defmethod slot-missing ((class adhoc-class) (instance adhoc-mixin) slot-name (op (eql 'slot-value))
@@ -1546,8 +1926,8 @@
     (finalize-inheritance-lite class)
     ;; if we entered here from an update-instance-for-redefined-class method, the make-instances-obsolete machinery
     ;; has already been processed, and this function should demand-recompute the children
-    (when *dependent*
-      (pushnew *dependent* (children-dependents class) :test #'eq))
+    (when %dependent%
+      (pushnew %dependent% (children-dependents class) :test #'equal))
     (let ((eslotds (component-eslotds class)))
       (loop for eslotd in eslotds
 	        append (let ((c (slot-value-using-class class object eslotd)))
@@ -1558,8 +1938,8 @@
 (defmethod get-hidden-children ((object adhoc-mixin))
   (let* ((class (class-of object)))
     (finalize-inheritance-lite class)
-    (when *dependent*
-      (pushnew *dependent* (children-dependents class) :test #'eq))
+    (when %dependent%
+      (pushnew %dependent% (children-dependents class) :test #'eq))
     (let ((eslotds (hidden-component-eslotds class)))
       (loop for eslotd in eslotds
 	        append (let ((c (slot-value-using-class class object eslotd)))
@@ -1595,12 +1975,14 @@
 		       (let ((defaulting nil)
 			     (descending nil)
 			     (eager nil)
+			     (visual nil)
 			     (noticers ())
 			     (list (copy-list (rest input-definition)))
 			     (body nil))
 			 (tagbody
 			  start
-			    (cond ((eq (first list) :eager) (setq eager t) (pop list) (go start))
+			    (cond ((eq (first list) :visual) (setq visual t) (pop list) (go start))
+				  ((eq (first list) :eager) (setq eager t) (pop list) (go start))
 				  ((eq (first list) :defaulting) (setq defaulting t) (pop list) (go start))
 				  ((eq (first list) :descending) (setq descending t) (pop list) (go start))
 				  ((and (consp (first list))
@@ -1620,13 +2002,21 @@
 				:initargs `'(,(first input-definition))
 				(append
 				 (if (null body)
-				     (if eager
-					 (if defaulting
-					     (list :slot-class :defaulting-eager-ordinary-input)
-					     (list :slot-class :eager-ordinary-input))
-					 (if defaulting
-					     (list :slot-class :defaulting-ordinary-input)
-					     (list :slot-class :ordinary-input)))
+				     (if visual
+					 (if eager
+					     (if defaulting
+						 (list :slot-class :visual-eager-defaulting-ordinary-input)
+						 (list :slot-class :visual-eager-ordinary-input))
+					     (if defaulting
+						 (list :slot-class :visual-defaulting-ordinary-input)
+						 (list :slot-class :visual-ordinary-input)))
+					 (if eager
+					     (if defaulting
+						 (list :slot-class :defaulting-eager-ordinary-input)
+						 (list :slot-class :eager-ordinary-input))
+					     (if defaulting
+						 (list :slot-class :defaulting-ordinary-input)
+						 (list :slot-class :ordinary-input))))
 				     (list* :body `',body
 					    :function `(with-cnm-support (:input (,(first input-definition) ,class-name))
 							 (named-lambda (:input (,(first input-definition) ,class-name))
@@ -1634,13 +2024,21 @@
 							   (declare (ignorable self))
 							   (declare (type ,class-name self))
 							   ,@body))
-					    (if eager
-						(if defaulting
-						    (list :slot-class :defaulting-eager-optional-input)
-						    (list :slot-class :eager-optional-input))
-						(if defaulting
-						    (list :slot-class :defaulting-optional-input)
-						    (list :slot-class :optional-input)))))
+					    (if visual
+						(if eager
+						    (if defaulting
+							(list :slot-class :visual-defaulting-eager-optional-input)
+							(list :slot-class :visual-eager-optional-input))
+						    (if defaulting
+							(list :slot-class :visual-defaulting-optional-input)
+							(list :slot-class :visual-optional-input)))
+						(if eager
+						    (if defaulting
+							(list :slot-class :defaulting-eager-optional-input)
+							(list :slot-class :eager-optional-input))
+						    (if defaulting
+							(list :slot-class :defaulting-optional-input)
+							(list :slot-class :optional-input))))))
 				 (when noticers
 				   (list :noticers
 					 (list
@@ -1663,86 +2061,97 @@
 	     (if (gethash slot *slots-table*)
 		 (duplicate-slot-error class-name slot)
 		 (setf (gethash slot *slots-table*) t)))
-     collect (cond ((and (consp attribute-definition)
-			 (symbolp (first attribute-definition))
-			 (not (keywordp (first attribute-definition))))
-		    (let ((modifiable nil)
-			  (uncached nil)
-			  (descending nil)
-			  (noticers ())
-			  (list (copy-list (rest attribute-definition)))
-			  (body nil))
+	collect (cond ((and (consp attribute-definition)
+			    (symbolp (first attribute-definition))
+			    (not (keywordp (first attribute-definition))))
+		       (let ((modifiable nil)
+			     (uncached nil)
+			     (descending nil)
+			     (visual nil)
+			     (eager nil)
+			     (noticers ())
+			     (list (copy-list (rest attribute-definition)))
+			     (body nil))
 
-		      (tagbody
-		       start
-			 (cond ((eq (first list) :modifiable) (setq modifiable t) (pop list) (go start))
-			       ((eq (first list) :uncached) (setq uncached t) (pop list) (go start))
-			       ((eq (first list) :descending) (setq descending t) (pop list) (go start))
-			       ((and (consp (first list))
-				     (eq (first (first list)) :noticer))
-				(push (rest (pop list)) noticers) (go start))
-			       ((and list
-				     (not (or (eq (first list) :modifiable)
-					      (eq (first list) :uncached)
-					      (eq (first list) :descending))))
-				(setq body list)
-				(go exit))
-			       ((null list) (error "attribute definitions, ~S, must have at least one expression."
-						   (first attribute-definition))))
-		       exit)
-		      (when descending
-			(push (first attribute-definition) *descending-attributes*))
-		      (cond ((and modifiable uncached) (error "attribute definitions, ~S, cannot be both modifiable and uncached."
-							      (first attribute-definition)))
-			    ((and noticers (not modifiable))
-			     (error "only modifiable attributes and inputs cannot have :noticers: ~S"
-				    (first attribute-definition)))
-			    (modifiable (list* 'list
+			 (tagbody
+			  start
+			    (cond ((eq (first list) :visual) (setq visual t) (pop list) (go start))
+				  ((eq (first list) :eager) (setq eager t) (pop list) (go start))
+				  ((eq (first list) :modifiable) (setq modifiable t) (pop list) (go start))
+				  ((eq (first list) :uncached) (setq uncached t) (pop list) (go start))
+				  ((eq (first list) :descending) (setq descending t) (pop list) (go start))
+				  ((and (consp (first list))
+					(eq (first (first list)) :noticer))
+				   (push (rest (pop list)) noticers) (go start))
+				  ((and list
+					(not (or (eq (first list) :modifiable)
+						 (eq (first list) :uncached)
+						 (eq (first list) :descending))))
+				   (setq body list)
+				   (go exit))
+				  ((null list) (error "attribute definitions, ~S, must have at least one expression."
+						      (first attribute-definition))))
+			  exit)
+			 (when descending
+			   (push (first attribute-definition) *descending-attributes*))
+			 (cond ((and modifiable uncached) (error "attribute definitions, ~S, cannot be both modifiable and uncached."
+								 (first attribute-definition)))
+			       ((and noticers (not modifiable))
+				(error "only modifiable attributes and inputs cannot have :noticers: ~S"
+				       (first attribute-definition)))
+			       (modifiable (list* 'list
+						  :name `',(first attribute-definition)
+						  :slot-class (if visual
+								  :visual-modifiable-attribute
+								  :modifiable-attribute)
+						  :function `(with-cnm-support (:modifiable-attribute (,(first attribute-definition) ,class-name))
+							       (named-lambda (:modifiable-attribute (,(first attribute-definition) ,class-name))
+								   (self)
+								 (declare (ignorable self))
+								 (declare (type ,class-name self))
+								 ,@body))
+						  :body `',body
+						  (when noticers
+						    (list :noticers
+							  (list
+							   'list
+							   (loop for noticer in (reverse noticers) for i from 0
+								 append
+								 (list 'list
+								       `(named-lambda (:noticer (,(first attribute-definition) ,class-name ,i))
+									    (self value)
+									  (declare (ignorable self value))
+									  (declare (type ,class-name self))
+									  ,@noticer
+									  (values))
+								       :source `',noticer)))))))
+
+			       (uncached (list 'list
 					       :name `',(first attribute-definition)
-					       :slot-class :modifiable-attribute
-					       :function `(with-cnm-support (:modifiable-attribute (,(first attribute-definition) ,class-name))
-							    (named-lambda (:modifiable-attribute (,(first attribute-definition) ,class-name))
+					       :slot-class :uncached-attribute
+					       :function `(with-cnm-support (:uncached-attribute (,(first attribute-definition) ,class-name))
+							    (named-lambda (:uncached-attribute (,(first attribute-definition) ,class-name))
 								(self)
 							      (declare (ignorable self))
 							      (declare (type ,class-name self))
 							      ,@body))
-					       :body `',body
-					       (when noticers
-						 (list :noticers
-						       (list
-							'list
-							(loop for noticer in (reverse noticers) for i from 0
-							   append
-							     (list 'list
-								   `(named-lambda (:noticer (,(first attribute-definition) ,class-name ,i))
-									(self value)
-								      (declare (ignorable self value))
-								      (declare (type ,class-name self))
-								      ,@noticer
-								      (values))
-								   :source `',noticer)))))))
-
-			    (uncached (list 'list
-					    :name `',(first attribute-definition)
-					    :slot-class :uncached-attribute
-					    :function `(with-cnm-support (:uncached-attribute (,(first attribute-definition) ,class-name))
-							 (named-lambda (:uncached-attribute (,(first attribute-definition) ,class-name))
-							     (self)
-							   (declare (ignorable self))
-							   (declare (type ,class-name self))
-							   ,@body))
-					    :body `',body))
-			    (t (list 'list
-				      :name `',(first attribute-definition)
-				      :slot-class :ordinary-attribute
-				      :function `(with-cnm-support (:attribute (,(first attribute-definition) ,class-name))
-						   (named-lambda (:attribute (,(first attribute-definition) ,class-name))
-						       (self)
-						     (declare (ignorable self))
-						     (declare (type ,class-name self))
-						     ,@body))
-				      :body `',body)))))
-		   (t (error "Invalid attribute specification: ~S" attribute-definition)))))
+					       :body `',body))
+			       (t (list 'list
+					:name `',(first attribute-definition)
+					:slot-class
+					(if (eq (first attribute-definition) 'adhoc-scene-graph::global-matrix)
+					    :global-matrix-attribute
+					    (if eager
+						:eager-ordinary-attribute
+						:ordinary-attribute))
+					:function `(with-cnm-support (:attribute (,(first attribute-definition) ,class-name))
+						     (named-lambda (:attribute (,(first attribute-definition) ,class-name))
+							 (self)
+						       (declare (ignorable self))
+						       (declare (type ,class-name self))
+						       ,@body))
+					:body `',body)))))
+		      (t (error "Invalid attribute specification: ~S" attribute-definition)))))
 
 (defun parse-components-section (class-name section &key (hidden? nil))
   (loop for component-definition in section
@@ -1752,6 +2161,7 @@
 		 (setf (gethash slot *slots-table*) t)))
      collect (let ((plist)
 		   (type-spec)
+		   (eager nil)
 		   (name)
 		   (aggregate nil)
 		   (indices nil)
@@ -1779,6 +2189,9 @@
 		   (error "component definition ~S has no type expression"
 			  (first component-definition))
 		   (remf plist :type))
+
+	       (setq eager (getf plist :eager nil))
+	       (remf plist :eager)
 		   
 	       (push name *descending-attributes*)
 		     
@@ -1787,8 +2200,12 @@
 			  :name `',name
 			  (append
 			   (if size
-			       (list :slot-class :array-aggregate)
-			       (list :slot-class :table-aggregate))
+			       (if eager
+				   (list :slot-class :eager-array-aggregate)
+				   (list :slot-class :array-aggregate))
+			       (if eager
+				   (list :slot-class :eager-table-aggregate)
+				   (list :slot-class :table-aggregate)))
 			   (when hidden? (list :hidden? t))
 			   (list :type-function
 				 (let ((value-sym (gensym)))
@@ -1838,7 +2255,7 @@
 				   :indices-expression `',indices))))
 		   (list 'list
 			 :name `',name
-			 :slot-class :ordinary-component
+			 :slot-class (if eager :eager-ordinary-component :ordinary-component)
 			 :hidden? hidden?
 			 :type-function `(named-lambda (:component-input :type (,class-name (,name ?)))
 					     (self)
@@ -2019,143 +2436,277 @@
 	 (when old
 	   (make-instances-obsolete old))))))
 
-(defmethod make-instances-obsolete :before ((class adhoc-class))
-  ;; special cases
-  ;; 'children' is a special meta-slot, there may be more such slots later
-  (loop while (children-dependents class)
-     do (let ((variable (pop (children-dependents class))))
-	  (unbind-this-variable variable)
-	  (unbind-dependent-variables variable))))
 
-(defmethod update-instance-for-different-class :before ((previous object) (current object) &rest initargs)
+(defmethod update-instance-for-redefined-class :after
+    ((instance adhoc-mixin) added-slots discarded-slots property-list &rest initargs)
   (declare (ignore initargs))
-
-  (let* ((class (class-of current))
-	 (slotds (class-slots class))
-	 (new-location nil))
-
-    (loop for new-slotd in (subseq slotds 5)
-	  when (and (eq (slot-definition-allocation new-slotd) :instance)
-		    (setq new-location (slot-definition-location new-slotd)))
-	    ;; clear these slots, more specific methods will have to fill them
-	    do (setf (standard-instance-access current new-location) +slot-unbound+)))
-#+NIL
-  (let* ((class (class-of previous))
-	 (slotds (class-slots class))
-	 (old-location nil))
-
-    (loop for old-slotd in slotds
-       when (and (typep old-slotd 'basic-attribute-definition-mixin)
-		 (eq (slot-definition-allocation old-slotd) :instance)
-		 (setq old-location (slot-definition-location old-slotd)))
-       do
-	  (let ((maybe-variable (standard-instance-access-compat previous old-location)))
-	   (when (typep maybe-variable 'variable)
-	     (unbind-this-variable maybe-variable)
-	     (unbind-dependent-variables maybe-variable)))))
-#+NIL
-  (let* ((class (class-of previous))
-	 (slotds (class-slots class))
-	 (old-location nil))
-
-    (loop for old-slotd in slotds
-       when (and (typep old-slotd 'basic-attribute-definition-mixin)
-		 (eq (slot-definition-allocation old-slotd) :instance)
-		 (setq old-location (slot-definition-location old-slotd)))
-       do (let ((new-slotd (get-slot-definition (class-of current) (slot-definition-name old-slotd))))
-	    (when (typep new-slotd 'basic-attribute-definition-mixin)
-	      (if (typep new-slotd 'effective-settable-slot-definition-mixin)
-		  (let ((transferred-value (standard-instance-access-compat current (slot-definition-location new-slotd))))
-		    (unless (typep transferred-value 'variable)
-		      ;; primary method may have naively placed value in standard instance location:
-		      (setf (slot-value (setf (standard-instance-access current (slot-definition-location new-slotd))
-					      (make-instance (variable-type new-slotd)
-							     :root-path (root-path2 current)
-							     :slot-name (slot-definition-name new-slotd)
-                                 :instance current))
-					'value)
-			    transferred-value)))
-		  (setf (standard-instance-access current (slot-definition-location new-slotd)) +slot-unbound+))))))
-  (values))
-
-(defmethod update-instance-for-redefined-class
-    ((instance object) added-slots discarded-slots property-list &rest initargs)
-  (declare (ignore added-slots discarded-slots initargs))
-
-  ;; first, unbind dependents for any slot we're losing:
-  (loop for value in property-list by #'cddr
-	when (variable-p value)
-	  do (unwind-protect (unbind-this-variable value)
-	       (unbind-dependent-variables value)))
-
-  #+sbcl
-  ;; for all variables in the slot vector, except set settable variables which are still going to be in setttable slots
-  ;; blow away generative data
-  (let ((slotv (sb-pcl::std-instance-slots instance))
-	(slotds (remove-if-not #'(lambda (slotd)
-				   (eq :instance (slot-definition-allocation slotd)))
-			       (class-slots (class-of instance)))))
-			       
-    (loop for maybe-variable across slotv
-	  for i from 0
-	  for slotd in slotds
-	  unless (= i (slot-definition-location slotd))
-	    do (error "slotd location does not match slotv index.")
-	  do (unless (eq maybe-variable +slot-unbound+)
-	       (when (variable-p maybe-variable)
+  (labels ((unbind-dependent (object new-slotd old-slotd)
+	     (let* ((location (slot-definition-location new-slotd))
+		    (maybe-basket (cond ((typep (class-of object) 'funcallable-standard-class)
+					 (funcallable-standard-instance-access object location))
+					(t (standard-instance-access-compat object location)))))
+	       (unless (eq maybe-basket +slot-unbound+)
 		 ;; preserve values of :set settable slots which are still settable-slots.
-		 (unless (and (typep slotd 'settable-slot-definition-mixin)
-			      (typep maybe-variable 'settable-variable)
-			      (eq :set (variable-status maybe-variable)))
-		   (unwind-protect
-			(unwind-protect (unbind-this-variable maybe-variable)
-			  (unbind-dependent-variables maybe-variable))
-		     (setf (svref slotv i) +slot-unbound+)))))))
+		 (unless (and (typep new-slotd 'settable-slot-definition-mixin)
+			      (eq :set (basket-status maybe-basket)))
+		   (cond ((typep (class-of object) 'funcallable-standard-class)
+			  (setf (funcallable-standard-instance-access object location) +slot-unbound+))
+			 (t (setf (standard-instance-access-compat object location) +slot-unbound+)))
+		   (let ((dependents (dependents maybe-basket)))
+		     (when (and (slot-boundp maybe-basket 'value)
+				(typep old-slotd 'component-definition-mixin))
+		       (scan-erase-object (slot-value maybe-basket 'value)))
+		     (setf (dependents maybe-basket) nil)
+		     (loop for dependent in dependents
+			   do (destructuring-bind (object old-slotd indices) dependent
+				(let* ((slot-name (slot-definition-name old-slotd))
+				       (new-slotd (get-slot-definition
+						   (class-of object) slot-name)))
+				  (when new-slotd
+				    (if indices
+					(unbind-aggregate-member object indices)
+					(unbind-dependent object new-slotd old-slotd)))))))))))
+	   
+	   (unbind-aggregate-member (aggregate indices)
+	     (assert (typep aggregate 'aggregate-mixin))
+	     ;; process the member slot:
+	     (cond ((typep aggregate 'table-aggregate)
+		    (when (slot-boundp aggregate 'value)
+		      (let ((table (slot-value aggregate 'value)))
+			(let ((member-basket (gethash indices table)))
+			  (when member-basket
+			    (unless (eq member-basket +slot-unbound+)
+			      (when (slot-boundp member-basket 'value)
+				(scan-erase-object (slot-value member-basket 'value)))
+			      ;;(slot-makunbound member-basket 'value)
+			      (remhash indices table)
+			      (let ((dependents (dependents member-basket)))
+				(setf (dependents member-basket) nil)
+				(loop for dependent in dependents
+				      do (destructuring-bind (object old-slotd indices) dependent
+					   (let* ((slot-name (slot-definition-name old-slotd))
+						  (new-slotd (get-slot-definition
+							      (class-of object) slot-name)))
+					     (when new-slotd
+					       (if indices
+						   (unbind-aggregate-member object indices)
+						   (unbind-dependent object new-slotd old-slotd)))))))))))))
+		   ((typep aggregate 'array-aggregate)
+		    (when (slot-boundp aggregate 'value)
+		      (let ((array (slot-value aggregate 'value)))
+			(let ((member-basket (apply #'aref array indices)))
+			  (unless (eq member-basket +slot-unbound+)
+			    (slot-makunbound member-basket 'value)
+			    (let ((dependents (dependents member-basket)))
+			      (setf (dependents member-basket) nil)
+			      (loop for dependent in dependents
+				    do (destructuring-bind (object old-slotd indices) dependent
+					 (let* ((slot-name (slot-definition-name old-slotd))
+						(new-slotd (get-slot-definition
+							    (class-of object) slot-name)))
+					   (when new-slotd
+					     (if indices
+						 (unbind-aggregate-member object indices)
+						 (unbind-dependent object new-slotd old-slotd))))))))))))))
 
-  #+ALLEGRO
-  (let ((slotv (excl:std-instance-slots instance))
-	(slotds (remove-if-not #'(lambda (slotd)
-				   (eq :instance (slot-definition-allocation slotd)))
-			       (class-slots (class-of instance)))))
-			       
-    (loop for maybe-variable across slotv
-	  for i from 0
-	  for slotd in slotds
-	  unless (= i (slot-definition-location slotd))
-	    do (error "slotd location does not match slotv index.")
-	  do (unless (eq maybe-variable +slot-unbound+)
-	       (when (variable-p maybe-variable)
-		 ;; preserve values of :set settable slots which are still settable-slots.
-		 (unless (and (typep slotd 'settable-slot-definition-mixin)
-			      (typep maybe-variable 'settable-variable)
-			      (eq :set (variable-status maybe-variable)))
-		   (unwind-protect
-			(unwind-protect (unbind-this-variable maybe-variable)
-			  (unbind-dependent-variables maybe-variable))
-		     (setf (svref slotv i) +slot-unbound+)))))))
+	   (process-discarded-slots ()
+	     (loop for (slot-name value) on property-list by #'cddr
+		   when (or (typep value 'basket) (typep value 'aggregate-mixin))
+		     do (let ((dependents (dependents value)))
+			  
+			  (when (slot-boundp value 'value)
+			    (let ((thing (slot-value value 'value)))
+			      (when (typep thing 'adhoc-scene-graph::node-mixin)
+				(scan-erase-object thing))))
+			  ;; not necessary here to setf (dependents value) to nil,
+			  ;; since value will be GC'd
+			  (loop for dependent in dependents
+				do (destructuring-bind (object old-slotd indices) dependent
+				     (let* ((slot-name (slot-definition-name old-slotd))
+					    (new-slotd (get-slot-definition (class-of object) slot-name)))
+				       (when new-slotd
+					 (if indices
+					     (unbind-aggregate-member object indices)
+					     (unbind-dependent object new-slotd old-slotd)))))))))
 
-  #+ccl 
-  (let* ((slotv (ccl::instance-slots instance))
-	 (size (ccl::uvsize slotv))
-	 (slotds (remove-if-not #'(lambda (slotd)
-				    (eq :instance (slot-definition-allocation slotd)))
-				(class-slots (class-of instance)))))
-    (loop for i from 1 below size
-	  for slotd in slotds
-	  unless (= i (slot-definition-location slotd))
-	    do (error "slotd location does not match slotv index ~S ~S" (slot-definition-location slotd) i)
-	  do (let ((maybe-variable (ccl::%svref slotv i)))
-	       (unless (eq maybe-variable (ccl::%slot-unbound-marker))
-		 (when (variable-p maybe-variable)
-		   ;; preserve values of :set settable slots which are still settable-slots.
-		   (unless (and (typep slotd 'settable-slot-definition-mixin)
-				(typep maybe-variable 'settable-variable)
-				(eq :set (variable-status maybe-variable)))
-		     (unwind-protect
-			  (unwind-protect (unbind-this-variable maybe-variable)
-			    (unbind-dependent-variables maybe-variable))
-		       (setf (ccl::%svref slotv i) (ccl::%slot-unbound-marker)))))))))
-  (values))
+	   (process-children-dependents ()
+	     (let* ((class (class-of instance))
+		    (dependents (children-dependents class)))
+	       (loop for dependent in dependents
+		     do (destructuring-bind (object old-slotd indices) dependent
+			  (if indices
+			      (let ((aggregate object))
+				(when (eq (superior aggregate) instance)
+				  (setf (children-dependents class)
+					(remove (list object old-slotd indices)
+						(children-dependents class)
+						:test #'equal))
+				  (unbind-aggregate-member aggregate indices)))
+			      (when (eq object instance)
+				(setf (children-dependents class)
+				      (remove (list object old-slotd nil)
+					      (children-dependents class)
+					      :test #'equal))
+				(let* ((slot-name (slot-definition-name old-slotd))
+				       (new-slotd (get-slot-definition (class-of object) slot-name)))
+				  (when new-slotd
+				    (unbind-dependent object new-slotd old-slotd)))))))))
+
+	   (process-remaining-dependencies ()
+	     (let ((slotv (#+SBCL sb-pcl::std-instance-slots
+			   #+ALLEGRO excl:std-instance-slots
+			   #+CCL ccl::instance-slots
+			   #-(OR SBCL ALLEGRO CCL) standard-instance-slots
+			   instance))
+		   #+CCL
+		   (size (ccl::uvsize slotv))
+		   (slotds (remove-if-not #'(lambda (slotd)
+					      ;; we don't deal with allocation :class or allocation :none
+					      (eq :instance (slot-definition-allocation slotd)))
+					  (class-slots (class-of instance)))))
+
+	       #+(OR ALLEGRO SBCL)
+	       (loop for maybe-basket across slotv
+		     for i from 0
+		     for slotd in slotds
+		     unless (= i (slot-definition-location slotd))
+		       do (error "slotd location does not match slotv index ~S ~S"
+				 (slot-definition-location slotd) i)
+		     do (unless (eq maybe-basket +slot-unbound+)
+			  (when (or (typep maybe-basket 'basket) (typep maybe-basket 'aggregate-mixin))
+			    ;; preserve set settable slots set but process their dependents:
+			    (unless (and (typep slotd 'settable-slot-definition-mixin)
+					 (eq :set (basket-status maybe-basket)))
+			      (setf (svref slotv i) +slot-unbound+))
+			    
+			    (let ((dependents (dependents maybe-basket)))
+			      (loop for dependent in dependents
+				    do (destructuring-bind (object old-slotd indices) dependent
+					 (let* ((slot-name (slot-definition-name old-slotd))
+						(new-slotd (get-slot-definition (class-of object) slot-name)))
+					   (when new-slotd
+					     (if indices
+						 (unbind-aggregate-member object indices)
+						 (unbind-dependent object new-slotd old-slotd))))))))))
+	       #+CCL
+	       (loop for i from 1 below size
+		     for slotd in slotds
+		     unless (= i (slot-definition-location slotd))
+		       do (error "slotd location does not match slotv index ~S ~S"
+				 (slot-definition-location slotd) i)
+		     do (let ((maybe-basket (ccl::%svref slotv i)))
+			  (unless (eq maybe-basket +slot-unbound+)
+			    (when (or (typep maybe-basket 'basket) (typep maybe-basket 'aggregate-mixin))
+			      ;; preserve set settable slots set but process their dependents:
+			      (unless (and (typep slotd 'settable-slot-definition-mixin)
+					   (eq :set (basket-status maybe-basket)))
+				(setf (ccl::%svref slotv i) +slot-unbound+)
+				
+				(let ((dependents (dependents maybe-basket)))
+				  (loop for dependent in dependents
+					do (destructuring-bind (object old-slotd indices) dependent
+					     (let* ((slot-name (slot-definition-name old-slotd))
+						    (new-slotd (get-slot-definition (class-of object) slot-name)))
+					       (when new-slotd
+						 (if indices
+						     (unbind-aggregate-member object indices)
+						     (unbind-dependent
+						      object new-slotd old-slotd)))))))))))))))
+    
+    ;; first, process the dependencies of the discarded slots:
+    (process-discarded-slots)
+
+
+    (scan-erase-object instance)
+    ;; next, process the children-dependencies of the class
+    ;; if we find ourself in these depedencies, remove the
+    ;; dependency from children-dependents and process the dependency
+    (process-children-dependents)
+		   
+    ;; next, any remaining dependencies in the slot-vector are processed
+    ;; leaving the instance in an almost virgin state (except set settable slots)
+    (process-remaining-dependencies)	     
+    
+    ;; finally, evaluate the eager slots in case the instance needs to be redrawn
+    (initialize-eager-slots instance)
+
+    (adhoc-scene-graph::rm-maybe-draw-node-recursively (send instance root))
+
+    ;; return the instance.
+    instance))
+
+(defun scan-erase-object (instance &optional done-list)
+  ;; erases a tree of objects ungeneratively without disturbing anything else.
+  (when (typep instance 'adhoc-scene-graph::node-mixin)
+    (adhoc-scene-graph::rm-erase-node instance)
+    (let ((slotv (#+SBCL sb-pcl::std-instance-slots
+		  #+ALLEGRO excl:std-instance-slots
+		  #+CCL ccl::instance-slots
+		  #-(OR SBCL ALLEGRO CCL) standard-instance-slots
+		  instance))
+	  #+CCL
+	  (size (ccl::uvsize slotv))
+	  (slotds (remove-if-not #'(lambda (slotd)
+				     ;; we don't deal with allocation :class or allocation :none
+				     (eq :instance (slot-definition-allocation slotd)))
+				 (class-slots (class-of instance)))))
+
+      #+(OR ALLEGRO SBCL)
+      (loop for maybe-basket across slotv
+	    for i from 0
+	    for slotd in slotds
+	    unless (= i (slot-definition-location slotd))
+	      do (error "slotd location does not match slotv index ~S ~S"
+			(slot-definition-location slotd) i)
+	    do (unless (or (eq (slot-definition-name slotd) 'root)
+			   (eq (slot-definition-name slotd) 'superior))
+		 (unless (eq maybe-basket +slot-unbound+)
+		   (if (typep maybe-basket 'basket)
+		       (when (slot-boundp maybe-basket 'value)
+			 (let ((value (slot-value maybe-basket 'value)))
+			   (unless (eq value instance)
+			     (unless (member value done-list)
+			       (scan-erase-object value (cons value done-list))))))
+		       (if (typep maybe-basket 'table-aggregate-mixin)
+			   (when (slot-boundp maybe-basket 'value)
+			     (let ((table (slot-value maybe-basket 'value)))
+			       (maphash #'(lambda (k v)
+					    (declare (ignore k))
+					    (when (typep v 'basket)
+					      (when (slot-boundp v 'value)
+						(let ((value (slot-value v 'value)))
+						  (unless (eq value instance)
+						    (unless (member value done-list)
+						      (scan-erase-object value (cons value done-list))))))))
+					table)))
+			   (when (typep maybe-basket 'array-aggregate-mixin)
+			     (when (slot-boundp maybe-basket 'value)
+			       (let ((array (slot-value maybe-basket 'value)))
+				 (labels ((do-rank (dims &rest indices)
+					    (when dims
+					      (let ((dim (car dims)))
+						(loop for i from 0 below dim
+						      append (if (null (cdr dims))
+								 (let ((maybe-basket
+									 (apply #'aref array (cons i indices))))
+								   (when (slot-boundp maybe-basket 'value)
+								     (let ((value
+									     (slot-value maybe-basket 'value)))
+								       (unless (eq value instance)
+									 (unless (member value done-list)
+									   (scan-erase-object
+									    value
+									    (cons value done-list)))))))
+								 (apply #'do-rank (cdr dims) i indices)))))))
+				   (let* ((dims (array-dimensions array)))
+				     (do-rank (reverse dims)))))))))))))))
+  
+
+
+
+    
+
+			    
 
 
 (defmacro defobject (name supers &body body)
@@ -2177,126 +2728,130 @@
 
 ;; define object and its slots for real (without using defobject)
 (ensure-class 'object
-	          :metaclass 'adhoc-class
-	          :direct-superclasses '(adhoc-mixin)
-	          :direct-slots
+	      :metaclass 'adhoc-class
+	      :direct-superclasses '(adhoc-mixin)
+	      :direct-slots
               (list
-	           (list :name 'index
-		             :slot-class :ordinary-attribute
-		             :function
-		             (lambda (next-emfun self)
-		               (declare (ignore next-emfun))
-		               (funcall
-			            (named-lambda (:attribute
-				                       (root-path object))
-			                (self)
-			              (declare (type object self))
-			              (let ((indices (the indices)))
-			                (when (null (cdr indices))
-			                  (car indices))))
-			            self))
-		             :body
-		             '((let ((indices (the indices)))
-			             (when (null (cdr indices))
-			               (car indices)))))
-	           (list :name 'children
-		             :slot-class :ordinary-attribute
-		             :function
-		             (lambda (next-emfun self)
-		               (declare (ignore next-emfun))
-		               (funcall
-			            (named-lambda (:attribute
-				                       (children object))
-			                (self)
-			              (declare (type object self))
-				      (remove-if #'null-object-p
-						 (get-object-children self)))
-			            self))
-		             :body '((get-object-children self)))
-	           (list :name 'root-path
-		             :slot-class :ordinary-attribute
-		             :function
-		             (lambda (next-emfun self)
-		               (declare (ignore next-emfun))
-		               (funcall
-			            (named-lambda (:attribute
-				                       (root-path object))
-			                (self)
-			              (declare (type object self))
-			              (root-path self))
-			            self))
-		             :body
-		             '((root-path self))))
-	          :direct-descending-attributes 'nil)
+	       (list :name 'index
+		     :slot-class :ordinary-attribute
+		     :function
+		     (lambda (next-emfun self)
+		       (declare (ignore next-emfun))
+		       (funcall
+			(named-lambda (:attribute
+				       (root-path object))
+			    (self)
+			  (declare (type object self))
+			  (let ((indices (the indices)))
+			    (when (null (cdr indices))
+			      (car indices))))
+			self))
+		     :body
+		     '((let ((indices (the indices)))
+			 (when (null (cdr indices))
+			   (car indices)))))
+	       (list :name 'children
+		     :slot-class :ordinary-attribute
+		     :function
+		     (lambda (next-emfun self)
+		       (declare (ignore next-emfun))
+		       (funcall
+			(named-lambda (:attribute
+				       (children object))
+			    (self)
+			  (declare (type object self))
+			  (remove-if #'null-object-p
+				     (get-object-children self)))
+			self))
+		     :body '((get-object-children self)))
+	       (list :name 'root-path
+		     :slot-class :ordinary-attribute
+		     :function
+		     (lambda (next-emfun self)
+		       (declare (ignore next-emfun))
+		       (funcall
+			(named-lambda (:attribute
+				       (root-path object))
+			    (self)
+			  (declare (type object self))
+			  (root-path self))
+			self))
+		     :body
+		     '((root-path self))))
+	      :direct-descending-attributes 'nil)
 
 ;; upgrade array-aggregate to include adhoc style messages:
 (ensure-class 'array-aggregate
-	          :metaclass 'funcallable-adhoc-class
-	          :direct-superclasses '(array-aggregate-mixin)
-	          :direct-slots
-	          (list
-	           (list :name 'size
-		             :slot-class :ordinary-attribute
-		             :function
-		             (named-lambda (:attribute (size array-aggregate))
-			             (next-emfun aggregate)
-		               (declare (ignore next-emfun))
-		               (declare (type array-aggregate aggregate))
-		               (funcall (size-function (component-definition aggregate)) (superior aggregate))))
-	           (list :name 'list-elements
-		             :slot-class :ordinary-attribute
-		             :function
-		             (named-lambda (:attribute
-				                    (list-elements array-aggregate))
-			             (next-emfun aggregate)
-		               (declare (ignore next-emfun))
-		               (declare (type array-aggregate aggregate))
-		               (labels ((list-rank (dims &rest indices)
-				                  (when dims
-				                    (let ((dim (car dims)))
-				                      (loop for i from 0 below dim
-					                        append (if (null (cdr dims))
-						                               (list (apply aggregate (cons i indices)))
-						                               (apply #'list-rank (cdr dims) i indices)))))))
-			             (let* ((%size (send aggregate size))
+	      :metaclass 'funcallable-adhoc-class
+	      :direct-superclasses '(array-aggregate-mixin)
+	      :direct-slots
+	      (list
+	       (list :name 'size
+		     :slot-class :ordinary-attribute
+		     :function
+		     (named-lambda (:attribute (size array-aggregate))
+			 (next-emfun aggregate)
+		       (declare (ignore next-emfun))
+		       (declare (type array-aggregate aggregate))
+		       (funcall (size-function (component-definition aggregate)) (superior aggregate))))
+	       (list :name 'list-elements
+		     :slot-class :ordinary-attribute
+		     :function
+		     (named-lambda (:attribute
+				    (list-elements array-aggregate))
+			 (next-emfun aggregate)
+		       (declare (ignore next-emfun))
+		       (declare (type array-aggregate aggregate))
+		       (let ((instance (superior aggregate)))
+			 (ensure-slot-value (class-of instance) instance (component-definition aggregate)))
+		       (labels ((list-rank (dims &rest indices)
+				  (when dims
+				    (let ((dim (car dims)))
+				      (loop for i from 0 below dim
+					    append (if (null (cdr dims))
+						       (list (apply aggregate (cons i indices)))
+						       (apply #'list-rank (cdr dims) i indices)))))))
+			 (let* ((%size (send aggregate size))
                                 (dims (if (consp %size) %size (list %size))
-                                     #+NO(array-dimensions (slot-value aggregate 'value))))
-			               (list-rank (reverse dims)))))
-		             :body '((labels ((list-rank (dims &rest indices)
-					                    (when dims
-					                      (let ((dim (car dims)))
-					                        (loop for i from 0 below dim
-					                              append (if (null (cdr dims))
-							                                 (list (apply aggregate (cons i indices)))
-							                                 (apply #'list-rank (cdr dims) i indices)))))))
-			                   (let ((dims (array-dimensions (slot-value aggregate 'value))))
-				                 (list-rank (reverse dims))))))))
+                                      #+NO(array-dimensions (slot-value aggregate 'value))))
+			   (list-rank (reverse dims)))))
+		     :body '((labels ((list-rank (dims &rest indices)
+					(when dims
+					  (let ((dim (car dims)))
+					    (loop for i from 0 below dim
+					          append (if (null (cdr dims))
+							     (list (apply aggregate (cons i indices)))
+							     (apply #'list-rank (cdr dims) i indices)))))))
+			       (let ((dims (array-dimensions (slot-value aggregate 'value))))
+				 (list-rank (reverse dims))))))))
 
 (ensure-class 'table-aggregate
-	          :metaclass 'funcallable-adhoc-class
-	          :direct-superclasses '(table-aggregate-mixin)
-	          :direct-slots
-	          (list
-	           (list :name 'indices
-		             :slot-class :ordinary-attribute
-		             :function
-		             (named-lambda (:attribute (indices table-aggregate))
-			             (next-emfun aggregate)
-		               (declare (ignore next-emfun))
-		               (declare (type table-aggregate aggregate))
-			           (funcall (indices-function (component-definition aggregate)) (superior aggregate))))
-	           (list :name 'list-elements
-		             :slot-class :ordinary-attribute
-		             :function
-		             (named-lambda (:attribute
-				                    (list-elements table-aggregate))
-			             (next-emfun aggregate)
-		               (declare (ignore next-emfun))
-		               (declare (type table-aggregate aggregate))
-		               (loop for indices in (send aggregate indices)
-			                 collect (apply #'aggregate-lookup aggregate indices)))
-		             :body '((loop for indices in (send aggregate indices)
-				                   collect (apply #'aggregate-lookup aggregate indices))))))
+	      :metaclass 'funcallable-adhoc-class
+	      :direct-superclasses '(table-aggregate-mixin)
+	      :direct-slots
+	      (list
+	       (list :name 'indices
+		     :slot-class :ordinary-attribute
+		     :function
+		     (named-lambda (:attribute (indices table-aggregate))
+			 (next-emfun aggregate)
+		       (declare (ignore next-emfun))
+		       (declare (type table-aggregate aggregate))
+		       (funcall (indices-function (component-definition aggregate)) (superior aggregate))))
+	       (list :name 'list-elements
+		     :slot-class :ordinary-attribute
+		     :function
+		     (named-lambda (:attribute
+				    (list-elements table-aggregate))
+			 (next-emfun aggregate)
+		       (declare (ignore next-emfun))
+		       (declare (type table-aggregate aggregate))
+		       (let ((instance (superior aggregate)))
+			 (ensure-slot-value (class-of instance) instance (component-definition aggregate)))
+		       (loop for indices in (send aggregate indices)
+			     collect (apply #'aggregate-lookup aggregate indices)))
+		     :body '((loop for indices in (send aggregate indices)
+				   collect (apply #'aggregate-lookup aggregate indices))))))
 
 (defmethod emit-defobject-body ((class adhoc-class) &optional add remove rename)
   (let* ((result ())
@@ -2379,36 +2934,37 @@
 
 
 
-(defmethod slot-value-using-class ((class adhoc-class) instance
-				   (slotd effective-parametric-slot-definition))
-  (let ((variable (get-variable instance slotd)))
-    (capture-direct-dependency variable)
-    (if (slot-boundp variable 'value)
-	(slot-value variable 'value)
-	(setf (slot-value variable 'value)
-	      (flet ((get-toplevel ()
-		       (if (attribute-function slotd)
-			   (coerce (funcall (attribute-function slotd) instance) 'double-float)
-			   0.0d0)))
-		(let ((component-definition (component-definition instance))
-		      (initarg (first (slot-definition-initargs slotd))))
-		  (if component-definition
-		      (let* ((provided-input-function-plist (apply #'provided-inputs component-definition
-								   (slot-value instance 'indices))))
-			(flet ((normal-lookup ()
-				 (let ((input-function (getf provided-input-function-plist initarg)))
-				   (if input-function
-				       (coerce (funcall input-function (superior instance) instance) 'double-float)
-				       (get-toplevel)))))
-			  (let ((plist-function (getf provided-input-function-plist :@)))
-			    (if plist-function
-				(let ((plist (funcall plist-function (superior instance) instance)))
-				  (let ((result (getf plist initarg +slot-unbound+)))
-				    (if (eq result +slot-unbound+)
-					(normal-lookup)
-					(coerce result 'double-float))))
-				(normal-lookup)))))
-		      (get-toplevel))))))))
+(defmethod ensure-slot-value ((class adhoc-class) (instance adhoc-mixin)
+			      (slotd effective-parametric-slot-definition))
+  (let ((basket (slot-basket instance slotd)))
+    (declare (type basket basket))
+    (capture-direct-dependent instance basket)
+    (when (or (not (slot-boundp basket 'value)) (recompute? instance slotd nil))
+      (setf (slot-value basket 'value)
+	    (flet ((get-toplevel ()
+		     (if (attribute-function slotd)
+			 (coerce (funcall (attribute-function slotd) instance) 'double-float)
+			 0.0d0)))
+	      (let ((component-definition (component-definition instance))
+		    (initarg (first (slot-definition-initargs slotd))))
+		(if component-definition
+		    (let* ((provided-input-function-plist (apply #'provided-inputs component-definition
+								 (slot-value instance 'indices))))
+		      (flet ((normal-lookup ()
+			       (let ((input-function (getf provided-input-function-plist initarg)))
+				 (if input-function
+				     (coerce (funcall input-function (superior instance) instance) 'double-float)
+				     (get-toplevel)))))
+			(let ((plist-function (getf provided-input-function-plist :@)))
+			  (if plist-function
+			      (let ((plist (funcall plist-function (superior instance) instance)))
+				(let ((result (getf plist initarg +slot-unbound+)))
+				  (if (eq result +slot-unbound+)
+				      (normal-lookup)
+				      (coerce result 'double-float))))
+			      (normal-lookup)))))
+		    (get-toplevel))))))
+    basket))
 
 (defun parse-parameters-section (class-name section)
   (loop for parameter-definition in section

@@ -4,6 +4,9 @@
 
 (in-package :adhoc-tests)
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (ql:quickload :fiveam))
+
 (5am:test smokecheck-1
   ()
   (5am:is (typep (defobject a0 ()) 'adhoc-class)))
