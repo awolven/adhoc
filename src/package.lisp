@@ -55,7 +55,8 @@
 	   #:root-path
 	   #:null-object
 	   #:null-object-p
-	   #:without-dependency-capture))
+	   #:without-dependency-capture
+	   #:plist-keys))
 
 (defmacro adhoc:defpackage (name &rest options)
   (let ((options
