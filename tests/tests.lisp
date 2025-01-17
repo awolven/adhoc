@@ -19,7 +19,7 @@
   ()
   #+sbcl (defobject a1 (a0))
   (defobject a0 () :inputs (a))
-  #+(or CCL ALLEGRO)(defobject a1 (a0))
+  #-sbcl(defobject a1 (a0))
   (let ((a1 (make-instance 'a1 'a 1)))
     (5am:is (eq (send a1 a) 1))))
 
@@ -27,11 +27,11 @@
   ()
   #+sbcl (defobject a1 (a0))
   (defobject a0 () :inputs ((a 0)))
-  #+(or CCL ALLEGRO)(defobject a1 (a0))
+  #-sbcl(defobject a1 (a0))
   (let ((a1 (make-instance 'a1)))
     (5am:is (eq (send a1 a) 0))))
 
-#-ccl ;; ccl does not seem to support forward referenced classes
+#-(or ccl ecl) ;; ccl (and ecl) do not seem to support forward referenced classes
 (5am:test inputs-1.5
   ()
   (let ((fwrc (intern (symbol-name (gensym)) *package*))
@@ -293,7 +293,7 @@
 (5am:test descending-attribute-test-1
   ()
 
-  #+(or CCL ALLEGRO) (defobject baz ()
+  #-sbcl (defobject baz ()
     :components
     ((b2 :type 'bar)))
   

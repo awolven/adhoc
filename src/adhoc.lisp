@@ -6,8 +6,11 @@
 
 (defvar self nil)
 
-(define-symbol-macro +slot-unbound+ #+sbcl sb-pcl::+slot-unbound+ #+ccl (ccl::%slot-unbound-marker)
-				    #+allegro `excl::..slot-unbound..)
+(define-symbol-macro +slot-unbound+
+    #+sbcl sb-pcl::+slot-unbound+
+    #+ccl (ccl::%slot-unbound-marker)
+    #+allegro `excl::..slot-unbound..
+    #+ecl `si:unbound)
 
 #+CCL
 (defmacro standard-instance-access-compat (instance location)
@@ -18,7 +21,7 @@
 (defmacro standard-instance-access-compat (instance location)
   `(standard-instance-access ,instance ,location))
 
-#+allegro
+#+(or allegro ecl)
 (defmacro standard-instance-access-compat (instance location)
   `(mop:standard-instance-access ,instance ,location))
 
@@ -37,7 +40,17 @@
   `(excl::named-function ,name (lambda (,@arglist)
 				 ,@body)))
 
-(defparameter +slotd-class-slot-name+ #+ccl 'ccl::CLASS #+sbcl 'sb-pcl::%class #+allegro 'excl::class)
+#+ecl
+(defmacro named-lambda (name (&rest arglist) &body body)
+  (declare (ignore name))
+  `(lambda (,@arglist)
+     ,@body))
+
+(defparameter +slotd-class-slot-name+
+  #+ccl 'ccl::CLASS
+  #+sbcl 'sb-pcl::%class
+  #+allegro 'excl::class
+  #+ecl 'clos::name)
 
 (defmacro send (object &rest messages)
   (if (null messages)
@@ -922,6 +935,7 @@
   #+ccl(let ((ccl::*update-slots-preserve-existing-wrapper* t))
 	 (ccl::update-class adhoc-class t))
   ;;#+allegro(excl::update-class-and-subclasses adhoc-class t)
+  #+ecl(clos::recursively-update-classes adhoc-class)
   (adhoc-class-finalize-inheritance-after adhoc-class))
 
 (defun adhoc-class-finalize-inheritance-after (class)
@@ -1471,6 +1485,7 @@
   (handler-bind ((#+SBCL sb-int:invalid-array-index-error
 		  #+CCL error
 		  #+ALLEGRO error
+		  #+ECL error
 		  #'(lambda (e)
 		      (declare (ignore e))
 		      (error "Aggregate indices ~S for ~S on ~S not found."
@@ -1940,6 +1955,7 @@
   (handler-bind ((#+SBCL sb-int:invalid-array-index-error
 		  #+CCL error
 		  #+ALLEGRO error
+		  #+ecl error
 		  #'(lambda (e)
 		      (declare (ignore e))
 		      nil)))
@@ -1947,6 +1963,7 @@
 	   (maybe-basket (handler-bind ((#+SBCL sb-int:invalid-array-index-error
 					   #+CCL error
 					   #+ALLEGRO error
+					   #+ecl error
 					   #'(lambda (e)
 					       (declare (ignore e))
 					       nil)))
@@ -2416,7 +2433,7 @@
 			   (list :type-function
 				 (let ((value-sym (gensym)))
 				   `(named-lambda (:aggregate-component-input :type (,class-name (,name . indices)))
-					(self &rest indices)
+				      (self &rest indices)
 				      (declare (ignorable self))
 				      (declare (ignorable indices))
 				      (declare (type ,class-name self))
@@ -2526,21 +2543,21 @@
 	     (setq getter `(with-cnm-support (:getter ,name (,class-name))
 			     (#+sbcl sb-int::named-lambda
 			      #+ccl ccl::named-lambda
-			      #+allegro named-lambda
+			      #+(or allegro ecl) named-lambda
 			      (:getter ,name (,class-name))
-				     (self)
-				     (declare (type ,class-name self))
-				     ,@(cadr olist)))))
+			      (self)
+			      (declare (type ,class-name self))
+			      ,@(cadr olist)))))
 	    (:setter
 	     (setq setter `(with-setter-cnm-support (:setter ,name (,class-name))
 			     (#+sbcl sb-int::named-lambda
 			      #+ccl ccl::named-lambda
-			      #+allegro named-lambda
+			      #+(or allegro ecl) named-lambda
 			      (:setter ,name (,class-name))
-				     (self value)
-				     (declare (type ,class-name self))
-				     (declare (ignorable value))
-				     ,@(cadr olist)))))
+			      (self value)
+			      (declare (type ,class-name self))
+			      (declare (ignorable value))
+			      ,@(cadr olist)))))
             (:accessor
              (push-on-end (cadr olist) readers)
              (push-on-end `(setf ,(cadr olist)) writers))
@@ -2553,7 +2570,7 @@
 	  (setq getter `(with-cnm-support (:getter ,name (,class-name))
 			  (#+sbcl sb-int::named-lambda
 			   #+ccl ccl::named-lambda
-			   #+allegro named-lambda
+			   #+(or allegro ecl) named-lambda
 			   (:getter ,name (,class-name))
 				     (self)
 				     (declare (type ,class-name self))
@@ -2564,7 +2581,7 @@
 	  (setq setter `(with-setter-cnm-support (:setter ,name (,class-name))
 			  (#+sbcl sb-int::named-lambda
 			   #+ccl ccl::named-lambda
-			   #+allegro named-lambda
+			   #+(or allegro ecl) named-lambda
 			   (:setter ,name (,class-name))
 				     (self value)
 				     (declare (type ,class-name self))
@@ -2761,18 +2778,19 @@
 				    (unbind-dependent object new-slotd old-slotd)))))))))
 
 	   (process-remaining-dependencies ()
-	     (let ((slotv (#+SBCL sb-pcl::std-instance-slots
-			   #+ALLEGRO excl:std-instance-slots
-			   #+CCL ccl::instance-slots
-			   #-(OR SBCL ALLEGRO CCL) standard-instance-slots
-			   instance))
+	     (let (#-ecl
+		   (slotv (#+SBCL sb-pcl::std-instance-slots
+				  #+ALLEGRO excl:std-instance-slots
+				  #+CCL ccl::instance-slots
+				  #-(OR SBCL ALLEGRO CCL) standard-instance-slots
+				  instance))
 		   #+CCL
 		   (size (ccl::uvsize slotv))
 		   (slotds (remove-if-not #'(lambda (slotd)
 					      ;; we don't deal with allocation :class or allocation :none
 					      (eq :instance (slot-definition-allocation slotd)))
 					  (class-slots (class-of instance)))))
-
+	       
 	       #+(OR ALLEGRO SBCL)
 	       (loop for maybe-basket across slotv
 		     for i from 0
@@ -2819,7 +2837,30 @@
 						 (if indices
 						     (unbind-aggregate-member object indices)
 						     (unbind-dependent
-						      object new-slotd old-slotd)))))))))))))))
+						      object new-slotd old-slotd))))))))))))
+	       #+ecl
+	       (loop for i from 0
+		  for slotd in slotds
+		  unless (= i (slot-definition-location slotd))
+		  do (error "slotd location does not match slotv index ~S ~S"
+			    (slot-definition-location slotd) i)
+		  do (let ((maybe-basket (si::instance-ref instance i)))
+		       (unless (eq maybe-basket +slot-unbound+)
+			 (when (or (typep maybe-basket 'basket) (typep maybe-basket 'aggregate-mixin))
+			   ;; preserve set settable slots set but process their dependents:
+			   (unless (and (typep slotd 'settable-slot-definition-mixin)
+					(eq :set (basket-status maybe-basket)))
+			     (si::instance-set instance i +slot-unbound+)))
+			 
+			 (let ((dependents (dependents maybe-basket)))
+			   (loop for dependent in dependents
+			      do (destructuring-bind (object old-slotd indices) dependent
+				   (let* ((slot-name (slot-definition-name old-slotd))
+					  (new-slotd (get-slot-definition (class-of object) slot-name)))
+				     (when new-slotd
+				       (if indices
+					   (unbind-aggregate-member object indices)
+					   (unbind-dependent object new-slotd old-slotd)))))))))))))
     
     ;; first, process the dependencies of the discarded slots:
     (process-discarded-slots)
@@ -2852,8 +2893,9 @@
   (when (typep instance 'adhoc-scene-graph::node-mixin)
     (adhoc-scene-graph::rm-erase-node instance)
     (adhoc-scene-graph::forget-object instance)
-    (let ((slotv (#+SBCL sb-pcl::std-instance-slots
-		  #+ALLEGRO excl:std-instance-slots
+    (let (#-ecl
+	  (slotv (#+SBCL sb-pcl::std-instance-slots
+			 #+ALLEGRO excl:std-instance-slots
 		  #+CCL ccl::instance-slots
 		  #-(OR SBCL ALLEGRO CCL) standard-instance-slots
 		  instance))
@@ -2863,60 +2905,64 @@
 				     ;; we don't deal with allocation :class or allocation :none
 				     (eq :instance (slot-definition-allocation slotd)))
 				 (class-slots (class-of instance)))))
-
-      #+(OR ALLEGRO SBCL)
-      (loop for maybe-basket across slotv
-	    for i from 0
-	    for slotd in slotds
-	    unless (= i (slot-definition-location slotd))
-	      do (error "slotd location does not match slotv index ~S ~S"
-			(slot-definition-location slotd) i)
-	    do (unless (or (eq (slot-definition-name slotd) 'root)
-			   (eq (slot-definition-name slotd) 'superior)
-			   (eq (slot-definition-name slotd) 'component-definition)
-			   (eq (slot-definition-name slotd) 'aggregate)
-			   (eq (slot-definition-name slotd) 'indices)
-			   (eq (slot-definition-name slotd) 'inittest))
-		 (unless (eq maybe-basket +slot-unbound+)
-		   (if (typep maybe-basket 'basket)
-		       (when (slot-boundp maybe-basket 'value)
-			 (let ((value (slot-value maybe-basket 'value)))
-			   (unless (eq value instance)
-			     (unless (member value done-list)
-			       (scan-erase-object value (cons value done-list))))))
-		       (if (typep maybe-basket 'table-aggregate-mixin)
-			   (when (slot-boundp maybe-basket 'value)
-			     (let ((table (slot-value maybe-basket 'value)))
-			       (maphash #'(lambda (k v)
-					    (declare (ignore k))
-					    (when (typep v 'basket)
-					      (when (slot-boundp v 'value)
-						(let ((value (slot-value v 'value)))
-						  (unless (eq value instance)
-						    (unless (member value done-list)
-						      (scan-erase-object value (cons value done-list))))))))
-					table)))
-			   (when (typep maybe-basket 'array-aggregate-mixin)
-			     (when (slot-boundp maybe-basket 'value)
-			       (let ((array (slot-value maybe-basket 'value)))
-				 (labels ((do-rank (dims &rest indices)
-					    (when dims
-					      (let ((dim (car dims)))
-						(loop for i from 0 below dim
-						      append (if (null (cdr dims))
-								 (let ((maybe-basket
-									 (apply #'aref array (cons i indices))))
-								   (when (slot-boundp maybe-basket 'value)
-								     (let ((value
-									     (slot-value maybe-basket 'value)))
-								       (unless (eq value instance)
-									 (unless (member value done-list)
-									   (scan-erase-object
-									    value
-									    (cons value done-list)))))))
-								 (apply #'do-rank (cdr dims) i indices)))))))
-				   (let* ((dims (array-dimensions array)))
-				     (do-rank (reverse dims)))))))))))))))
+      
+      (loop with maybe-basket
+	 for i from 0
+	 for slotd in slotds
+	 unless (= i (slot-definition-location slotd))
+	 do (error "slotd location does not match slotv index ~S ~S"
+		   (slot-definition-location slotd) i)
+	 do (setq maybe-basket
+		  #+(OR ALLEGRO SBCL) (svref slotv i)
+		  #+CCL (ccl::%svref slotv i)
+		  #+ECL (si::instance-ref instance i))
+		  
+	 do (unless (or (eq (slot-definition-name slotd) 'root)
+			(eq (slot-definition-name slotd) 'superior)
+			(eq (slot-definition-name slotd) 'component-definition)
+			(eq (slot-definition-name slotd) 'aggregate)
+			(eq (slot-definition-name slotd) 'indices)
+			(eq (slot-definition-name slotd) 'inittest))
+	      (unless (eq maybe-basket +slot-unbound+)
+		(if (typep maybe-basket 'basket)
+		    (when (slot-boundp maybe-basket 'value)
+		      (let ((value (slot-value maybe-basket 'value)))
+			(unless (eq value instance)
+			  (unless (member value done-list)
+			    (scan-erase-object value (cons value done-list))))))
+		    (if (typep maybe-basket 'table-aggregate-mixin)
+			(when (slot-boundp maybe-basket 'value)
+			  (let ((table (slot-value maybe-basket 'value)))
+			    (maphash #'(lambda (k v)
+					 (declare (ignore k))
+					 (when (typep v 'basket)
+					   (when (slot-boundp v 'value)
+					     (let ((value (slot-value v 'value)))
+					       (unless (eq value instance)
+						 (unless (member value done-list)
+						   (scan-erase-object value (cons value done-list))))))))
+				     table)))
+			(when (typep maybe-basket 'array-aggregate-mixin)
+			  (when (slot-boundp maybe-basket 'value)
+			    (let ((array (slot-value maybe-basket 'value)))
+			      (labels ((do-rank (dims &rest indices)
+					 (when dims
+					   (let ((dim (car dims)))
+					     (loop for i from 0 below dim
+						append (if (null (cdr dims))
+							   (let ((maybe-basket
+								  (apply #'aref array (cons i indices))))
+							     (when (slot-boundp maybe-basket 'value)
+							       (let ((value
+								      (slot-value maybe-basket 'value)))
+								 (unless (eq value instance)
+								   (unless (member value done-list)
+								     (scan-erase-object
+								      value
+								      (cons value done-list)))))))
+							   (apply #'do-rank (cdr dims) i indices)))))))
+				(let* ((dims (array-dimensions array)))
+				  (do-rank (reverse dims)))))))))))))))
   
 
 
@@ -3213,7 +3259,7 @@
 					   
 					   (#+SBCL sb-int:named-lambda
 					    #+ccl ccl::named-lambda
-					    #+allegro named-lambda
+					    #+(or allegro ecl) named-lambda
 					    (:parameter (,(first parameter-definition) ,class-name))
 					       (self)
 					     (declare (ignorable self))
