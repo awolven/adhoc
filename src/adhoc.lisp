@@ -1146,7 +1146,8 @@
    (component-definition :accessor component-definition :initform nil :initarg :component-definition)
    (aggregate :reader aggregate :initform nil :initarg :aggregate)
    (indices :reader component-indices :initform nil :initarg :indices)
-   (inittest :initform nil)))
+   (inittest :initform nil)
+   (adhoc-scene-graph::retransform? :initform nil)))
 
 (defclass adhoc-scene-graph::node-mixin (adhoc-mixin)
   ()
@@ -1157,6 +1158,12 @@
 
 (defgeneric adhoc-scene-graph::rm-draw-node (node)
   (:method (node) (values)))
+
+;;(defmethod adhoc-scene-graph::rm-draw-node :after ((node adhoc-scene-graph::node-mixin))
+;;  (setf (slot-value node 'adhoc-scene-graph::retransform?) nil)
+;;  (values))
+
+
 
 (defgeneric adhoc-scene-graph::rm-erase-node (node)
   (:method (node) (values)))
@@ -1274,6 +1281,10 @@
     (when (typep (component-definition instance) 'eager-attribute-definition-mixin)
       (loop for child in (send instance list-elements)
 	    do (initialize-eager-slots child)))))
+
+(defmethod adhoc-scene-graph::rm-draw-node ((node aggregate-mixin))
+  (let ((elements (send node list-elements)))
+    (mapcar #'adhoc-scene-graph::rm-draw-node elements)))
 
 (defclass array-aggregate-mixin (aggregate-mixin)
   ()
@@ -1972,6 +1983,10 @@
 	(slot-makunbound maybe-basket 'value)))))  
 
 
+(defmethod frob-this-slot (class object (slotd aggregate-component-definition-mixin))
+  (let ((basket (slot-basket object slotd)))
+    (slot-makunbound basket 'value)))
+
 (defmethod frob-this-slot (class object (slotd basic-attribute-definition-mixin))
   (let ((basket (slot-basket object slotd)))
     ;; we don't want to erase basket dependents here
@@ -2002,16 +2017,28 @@
 		   ;; when indices are present, object is the aggregate
 		   ;; so as to avoid an extra slot-value call
 		   (let ((aggregate object))
-		     (frob-aggregate-member-slot slotd aggregate indices))
+		     (frob-aggregate-member-slot slotd aggregate indices)
+		     #+NOTNOW
+		     (if (typep aggregate 'array-aggregate)
+			 (let ((size (send aggregate size)))
+			   (when (every #'< indices size)
+			     (frob-aggregate-member-slot slotd aggregate indices)))
+			 (if (typep aggregate 'table-aggregate)
+			     (when (member indices (send aggregate indices))
+			       (frob-aggregate-member-slot slotd aggregate indices))
+			     (error "shouldn't reach here."))))
+			       
 			      
 		   (let ((class (class-of object)))
 		     (frob-this-slot class object slotd)
 		     (pushnew object frobbed-objects)))))
 
-    (loop for object in (nreverse frobbed-objects)
-	  when (and (typep object 'adhoc-scene-graph::node-mixin)
-		    redraw?)
-	    do (adhoc-scene-graph::rm-redraw-node object)
+    (loop for object in frobbed-objects
+	  when redraw?
+	    do (adhoc-scene-graph::rm-erase-node object))
+    (loop for object in frobbed-objects
+	  when redraw?
+	    do (adhoc-scene-graph::rm-draw-node object)
 	  when (and (typep object 'adhoc-scene-graph::node-mixin)
 		    (send object adhoc-scene-graph::retransform?))
 	    do (adhoc-scene-graph::rm-retransform-node object)
