@@ -40,10 +40,6 @@
 	   #:defobject-amendment
 	   #:object
 	   #:adhoc-mixin
-	   #:slot-variable
-	   #:with-variables
-	   #:parametric-variable
-	   #:component-variable
 	   #:get-object-children
 	   #:root
 	   #:inferior
