@@ -40,10 +40,6 @@
 	   #:defobject-amendment
 	   #:object
 	   #:adhoc-mixin
-	   #:slot-variable
-	   #:with-variables
-	   #:parametric-variable
-	   #:component-variable
 	   #:get-object-children
 	   #:root
 	   #:inferior
@@ -55,7 +51,8 @@
 	   #:root-path
 	   #:null-object
 	   #:null-object-p
-	   #:without-dependency-capture))
+	   #:without-dependency-capture
+	   #:plist-keys))
 
 (defmacro adhoc:defpackage (name &rest options)
   (let ((options
@@ -76,3 +73,4 @@
 	   ,@options)))
     `(cl:defpackage ,name ,@options)))
 	   
+(adhoc:defpackage :adhoc-scene-graph)

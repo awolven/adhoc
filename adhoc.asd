@@ -4,9 +4,10 @@
 
 (defsystem adhoc
   :description "Another Declarative Hierarchical Object-centric CLOS Customization"
-  :depends-on (:closer-mop)
+  :depends-on (:closer-mop :bordeaux-threads)
   :author "Andrew K Wolven <awolven@gmail.com>"
   :license "GPLv3"
   :components
   ((:file "src/package")
-   (:file "src/adhoc")))
+   (:file "src/adhoc")
+   #+SBCL(:file "src/sbcl")))
