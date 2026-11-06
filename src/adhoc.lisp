@@ -138,6 +138,10 @@
 
 (defclass basic-attribute-definition-mixin () ())
 
+(defmethod print-object ((thing basic-attribute-definition-mixin) stream)
+  (print-unreadable-object (thing stream :type t)
+    (format stream " ~S" (slot-definition-name thing))))
+
 (defclass eager-attribute-definition-mixin () ())
 
 (defclass direct-basic-attribute-definition-mixin
@@ -1149,6 +1153,7 @@
    (aggregate :reader aggregate :initform nil :initarg :aggregate)
    (indices :reader component-indices :initform nil :initarg :indices)
    (inittest :initform nil)
+   (suppressed? :initform nil :accessor suppressed?)
    (adhoc-scene-graph::retransform? :initform nil)))
 
 (defclass adhoc-scene-graph::node-mixin (adhoc-mixin)
@@ -1277,6 +1282,7 @@
    (inst-lock :initform (bt:make-recursive-lock "instance lock"))
    (superior :reader superior :initform nil :initarg :superior)
    (component-definition :reader component-definition :initform nil :initarg :component-definition)
+   (suppressed? :initform nil :accessor suppressed?)
    (value :reader basket-value :initarg :value)
    (dependents :accessor dependents :initform nil))
   (:metaclass funcallable-adhoc-class))
@@ -1285,8 +1291,9 @@
   (declare (ignore initargs))
   (prog1 (call-next-method)
     (when (typep (component-definition instance) 'eager-attribute-definition-mixin)
-      (loop for child in (send instance list-elements)
-	    do (initialize-eager-slots child)))))
+      (let ((children (send instance list-elements)))
+	(loop for child in children
+	      do (initialize-eager-slots child))))))
 
 (defmethod adhoc-scene-graph::rm-draw-node ((node aggregate-mixin))
   (let ((elements (send node list-elements)))
@@ -2060,9 +2067,10 @@
 	  when redraw
 	    do (adhoc-scene-graph::rm-erase-node object))
     (loop for object in frobbed-objects
-	  when redraw
+	  when (and redraw (not (suppressed? object)))
 	    do (adhoc-scene-graph::rm-draw-node object)
-	  when (and (typep object 'adhoc-scene-graph::node-mixin)
+	  when (and (not (suppressed? object))
+		    (typep object 'adhoc-scene-graph::node-mixin)
 		    (send object adhoc-scene-graph::retransform?))
 	    do (adhoc-scene-graph::rm-retransform-node object)
 	       (setf (slot-value object 'adhoc-scene-graph::retransform?) nil)))
